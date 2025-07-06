@@ -1,5 +1,5 @@
 # services for todo app 
-from typing import List, Optional
+from typing import List as ListType, Optional
 from uuid import UUID
 
 from edgy import Database
@@ -18,7 +18,7 @@ class ListService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def get_all_lists(self) -> List[List]:
+    async def get_all_lists(self) -> ListType[List]:
         """Get all lists ordered by creation date"""
         return await List.objects.all().order_by("-created_at")
     
@@ -52,7 +52,7 @@ class TaskService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def get_tasks_by_list(self, list_id: UUID) -> List[Task]:
+    async def get_tasks_by_list(self, list_id: UUID) -> ListType[Task]:
         """Get all tasks for a list ordered by position"""
         return await Task.objects.filter(list_id=list_id).order_by("position")
     
@@ -90,7 +90,7 @@ class TaskService:
         task = await self.get_task_by_id(task_id)
         return await task.update(checked=not task.checked)
     
-    async def reorder_tasks(self, list_id: UUID, item_ids: List[UUID]) -> List[Task]:
+    async def reorder_tasks(self, list_id: UUID, item_ids: ListType[UUID]) -> ListType[Task]:
         """Reorder tasks by updating their positions"""
         tasks = []
         for position, task_id in enumerate(item_ids, 1):
@@ -108,7 +108,7 @@ class ShoppingItemService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def get_items_by_list(self, list_id: UUID) -> List[ShoppingItem]:
+    async def get_items_by_list(self, list_id: UUID) -> ListType[ShoppingItem]:
         """Get all shopping items for a list ordered by position"""
         return await ShoppingItem.objects.filter(list_id=list_id).order_by("position")
     
@@ -146,7 +146,7 @@ class ShoppingItemService:
         item = await self.get_item_by_id(item_id)
         return await item.update(checked=not item.checked)
     
-    async def reorder_items(self, list_id: UUID, item_ids: List[UUID]) -> List[ShoppingItem]:
+    async def reorder_items(self, list_id: UUID, item_ids: ListType[UUID]) -> ListType[ShoppingItem]:
         """Reorder shopping items by updating their positions"""
         items = []
         for position, item_id in enumerate(item_ids, 1):

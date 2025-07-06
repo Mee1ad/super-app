@@ -3,7 +3,7 @@ from edgy import Database
 
 from core.config import settings
 from db.session import database
-from apps.todo.endpoints import ListHandler, TaskHandler, ShoppingItemHandler, SearchHandler
+from apps.todo.endpoints import todo_router
 
 
 @get(path="/ping")
@@ -11,20 +11,10 @@ def ping() -> dict:
     return {"message": "pong"}
 
 
-# Create handlers with database dependency
-list_handler = ListHandler(database)
-task_handler = TaskHandler(database)
-shopping_item_handler = ShoppingItemHandler(database)
-search_handler = SearchHandler(database)
-
-
 app = Esmerald(
     routes=[
         Gateway(handler=ping),
-        Gateway(handler=list_handler),
-        Gateway(handler=task_handler),
-        Gateway(handler=shopping_item_handler),
-        Gateway(handler=search_handler),
+        todo_router,
     ],
     enable_openapi=True,
     title="LifeHub API",
