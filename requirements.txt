@@ -9,4 +9,5 @@ ruff
 mypy
 pytest
 factory_boy
-structlog 
+structlog
+psycopg2-binary 
