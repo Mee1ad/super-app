@@ -69,7 +69,17 @@ class TaskResponse(TaskBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    
+    @classmethod
+    def from_orm(cls, obj):
+        # Extract list_id from the nested list object
+        data = obj.dict() if hasattr(obj, 'dict') else obj
+        if 'list' in data and isinstance(data['list'], dict) and 'id' in data['list']:
+            data['list_id'] = data['list']['id']
+        elif 'list' in data and hasattr(data['list'], 'id'):
+            data['list_id'] = data['list'].id
+        return cls(**data)
 
 
 # Shopping Item Schemas
@@ -103,7 +113,17 @@ class ShoppingItemResponse(ShoppingItemBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    
+    @classmethod
+    def from_orm(cls, obj):
+        # Extract list_id from the nested list object
+        data = obj.dict() if hasattr(obj, 'dict') else obj
+        if 'list' in data and isinstance(data['list'], dict) and 'id' in data['list']:
+            data['list_id'] = data['list']['id']
+        elif 'list' in data and hasattr(data['list'], 'id'):
+            data['list_id'] = data['list'].id
+        return cls(**data)
 
 
 # Reorder Schemas

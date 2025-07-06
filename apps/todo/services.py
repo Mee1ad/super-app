@@ -54,7 +54,7 @@ class TaskService:
     
     async def get_tasks_by_list(self, list_id: UUID) -> ListType[Task]:
         """Get all tasks for a list ordered by position"""
-        return await Task.query.filter(list_id=list_id).order_by("position")
+        return await Task.query.filter(list=list_id).order_by("position")
     
     async def get_task_by_id(self, task_id: UUID) -> Task:
         """Get a task by ID"""
@@ -66,10 +66,11 @@ class TaskService:
     async def create_task(self, list_id: UUID, task_data: TaskCreate) -> Task:
         """Create a new task in a list"""
         # Get the highest position in the list
-        max_position = await Task.query.filter(list_id=list_id).max("position") or 0
+        tasks = await Task.query.filter(list=list_id).order_by("-position").limit(1)
+        max_position = tasks[0].position if tasks else 0
         task_data_dict = task_data.dict()
         task_data_dict["position"] = max_position + 1
-        task_data_dict["list_id"] = list_id
+        task_data_dict["list"] = list_id
         
         return await Task.query.create(**task_data_dict)
     
@@ -95,7 +96,7 @@ class TaskService:
         tasks = []
         for position, task_id in enumerate(item_ids, 1):
             task = await self.get_task_by_id(task_id)
-            if task.list_id != list_id:
+            if task.list != list_id:
                 raise ValueError("Task does not belong to the specified list")
             updated_task = await task.update(position=position)
             tasks.append(updated_task)
@@ -110,7 +111,7 @@ class ShoppingItemService:
     
     async def get_items_by_list(self, list_id: UUID) -> ListType[ShoppingItem]:
         """Get all shopping items for a list ordered by position"""
-        return await ShoppingItem.query.filter(list_id=list_id).order_by("position")
+        return await ShoppingItem.query.filter(list=list_id).order_by("position")
     
     async def get_item_by_id(self, item_id: UUID) -> ShoppingItem:
         """Get a shopping item by ID"""
@@ -122,10 +123,11 @@ class ShoppingItemService:
     async def create_item(self, list_id: UUID, item_data: ShoppingItemCreate) -> ShoppingItem:
         """Create a new shopping item in a list"""
         # Get the highest position in the list
-        max_position = await ShoppingItem.query.filter(list_id=list_id).max("position") or 0
+        items = await ShoppingItem.query.filter(list=list_id).order_by("-position").limit(1)
+        max_position = items[0].position if items else 0
         item_data_dict = item_data.dict()
         item_data_dict["position"] = max_position + 1
-        item_data_dict["list_id"] = list_id
+        item_data_dict["list"] = list_id
         
         return await ShoppingItem.query.create(**item_data_dict)
     
@@ -151,7 +153,7 @@ class ShoppingItemService:
         items = []
         for position, item_id in enumerate(item_ids, 1):
             item = await self.get_item_by_id(item_id)
-            if item.list_id != list_id:
+            if item.list != list_id:
                 raise ValueError("Shopping item does not belong to the specified list")
             updated_item = await item.update(position=position)
             items.append(updated_item)

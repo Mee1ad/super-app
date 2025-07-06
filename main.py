@@ -1,4 +1,4 @@
-from esmerald import Esmerald, Gateway, get
+from esmerald import Esmerald, Gateway, get, CORSConfig
 from core.config import settings
 from db.session import database
 from apps.todo.endpoints import (
@@ -11,6 +11,15 @@ from apps.todo.endpoints import (
 @get(path="/ping")
 def ping() -> dict:
     return {"message": "pong"}
+
+# Robust CORS configuration
+cors_config = CORSConfig(
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+    max_age=3600,
+)
 
 app = Esmerald(
     routes=[
@@ -33,6 +42,7 @@ app = Esmerald(
         reorder_items,
         search,
     ],
+    cors_config=cors_config,
     enable_openapi=True,
     openapi_url="/openapi",
     title="LifeHub API",
