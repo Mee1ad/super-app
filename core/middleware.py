@@ -1,0 +1,1 @@
+# Global middleware (CORS, gzip, logging, etc.) 

@@ -1,0 +1,140 @@
+---
+alwaysApply: true
+---
+# Esmerald Python REST API Guidelines
+
+## Project Structure
+
+* Use a **multi-app, feature-based structure**.
+
+* Version your API from day one using `/api/v1/` for all endpoints.
+
+* Use a **feature-first structure**:
+
+```
+project/
+├── apps/
+│   ├── todo/
+│   │   ├── endpoints.py
+│   │   ├── schemas.py
+│   │   ├── services.py
+│   │   ├── models.py
+│   │   └── __init__.py
+│   ├── diary/
+│   │   ├── endpoints.py
+│   │   ├── schemas.py
+│   │   ├── services.py
+│   │   ├── models.py
+│   │   └── __init__.py
+├── api/
+│   ├── v1/
+│   │   ├── api_v1.py (combines app routers)
+│   │   └── __init__.py
+├── core/
+│   ├── config.py
+│   ├── exceptions.py
+│   ├── middleware.py
+│   └── security.py
+├── db/
+│   ├── base.py
+│   ├── session.py
+│   └── seed.py
+├── tests/
+│   ├── unit/
+│   └── integration/
+├── main.py
+├── routers.py
+└── requirements.txt
+```
+
+## Framework Setup
+
+* Use `Esmerald` for ASGI support
+* Use `Edgy` ORM (default for Esmerald)
+* Separate routers per domain
+* Use `APIGateHandler` for global error handling
+
+## Best Practices
+
+### General
+
+* Use **environment-based settings** via `pydantic.BaseSettings`
+* Use `.env` for secrets and config
+* Enable type hints and enforce with `mypy`
+* Apply linters: `ruff`, `black`, `isort`
+
+### Versioning
+
+* Namespace all APIs under `/api/v1/...`
+* Use versioned routers (`v1_router`, etc.)
+
+### Schemas
+
+* Separate `schemas.py` for request/response models
+* Use `pydantic.BaseModel`
+* Always validate input and sanitize output
+
+### Database
+
+* Use `Edgy` for models
+* Place reusable base model logic in `db/base.py`
+* Use Alembic (or Edgy-native migrations) for schema versioning
+
+### Services Layer
+
+* Put business logic in `services.py`
+* Endpoints should call services only
+* Keep endpoints thin and declarative
+
+### Error Handling
+
+* Use Esmerald’s `APIException`
+* Centralize error messages in `core/exceptions.py`
+* Provide clear messages and codes
+
+### Security
+
+* Use OAuth2/JWT in `core/security.py`
+* Use dependencies for RBAC/permissions
+* Sanitize sensitive fields before returning to users
+
+### Middleware
+
+* Log every request/response time
+* Handle CORS, gzip, error wrapping, and authentication globally
+
+### Testing
+
+* Use `pytest`
+* Separate unit and integration tests
+* Use `TestClient(app=...)` from Esmerald
+* Use factories for fake data (e.g. `factory_boy`)
+
+### Docs
+
+* Use Esmerald’s built-in OpenAPI auto-docs
+* Add tags and summaries for each endpoint
+* Annotate responses with status codes
+
+### DevOps
+
+* Include Docker support
+* Use `.env` and `.env.example`
+* Use `Makefile` or `justfile` for common dev commands
+* Add pre-commit hooks
+* Setup CI (GitHub Actions or others)
+
+### Monitoring
+
+* Add request logging with `structlog`
+* Optional: integrate Sentry or Prometheus
+
+### Misc
+
+* Use consistent naming (snake\_case for files, PascalCase for classes)
+* Group async and sync functions clearly
+* Prefer `async` endpoints for scalability
+
+---
+
+> Extend this guide per project requirements. Consistency and clarity first.

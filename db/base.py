@@ -1,0 +1,1 @@
+# Base model logic for Edgy ORM 

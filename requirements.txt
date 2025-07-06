@@ -1,0 +1,12 @@
+esmerald
+edgy
+uvicorn
+pydantic
+python-dotenv
+black
+isort
+ruff
+mypy
+pytest
+factory_boy
+structlog 
