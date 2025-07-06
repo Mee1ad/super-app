@@ -1,6 +1,4 @@
 from esmerald import Esmerald, Gateway, get
-from edgy import Database
-
 from core.config import settings
 from db.session import database
 from apps.todo.endpoints import (
@@ -10,11 +8,9 @@ from apps.todo.endpoints import (
     search
 )
 
-
 @get(path="/ping")
 def ping() -> dict:
     return {"message": "pong"}
-
 
 app = Esmerald(
     routes=[
@@ -38,7 +34,16 @@ app = Esmerald(
         search,
     ],
     enable_openapi=True,
+    openapi_url="/openapi",
     title="LifeHub API",
     version="1.0.0",
     description="A comprehensive todo and shopping list API",
-) 
+)
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect() 
