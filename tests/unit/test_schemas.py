@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from apps.todo.schemas import (
@@ -48,8 +48,8 @@ class TestListSchemas:
             "type": ListType.SHOPPING,
             "title": "Shopping List",
             "variant": Variant.OUTLINED,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         list_response = ListResponse(**data)
         assert list_response.id == data["id"]
@@ -97,8 +97,8 @@ class TestTaskSchemas:
             "checked": True,
             "variant": Variant.FILLED,
             "position": 2,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         task_response = TaskResponse(**data)
         assert task_response.id == data["id"]
@@ -152,8 +152,8 @@ class TestShoppingItemSchemas:
             "checked": True,
             "variant": Variant.OUTLINED,
             "position": 3,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         item_response = ShoppingItemResponse(**data)
         assert item_response.id == data["id"]
@@ -182,8 +182,8 @@ class TestSearchSchemas:
             type=ListType.TASK,
             title="Test List",
             variant=Variant.DEFAULT,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         
         task_response = TaskResponse(
@@ -194,8 +194,8 @@ class TestSearchSchemas:
             checked=False,
             variant=Variant.DEFAULT,
             position=0,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         
         item_response = ShoppingItemResponse(
@@ -208,8 +208,8 @@ class TestSearchSchemas:
             checked=False,
             variant=Variant.DEFAULT,
             position=0,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         
         search_response = SearchResponse(

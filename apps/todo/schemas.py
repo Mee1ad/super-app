@@ -4,7 +4,7 @@ from typing import Optional, List
 from uuid import UUID
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ListType(str, Enum):
@@ -39,8 +39,7 @@ class ListResponse(ListBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Task Schemas
@@ -70,8 +69,7 @@ class TaskResponse(TaskBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Shopping Item Schemas
@@ -105,13 +103,12 @@ class ShoppingItemResponse(ShoppingItemBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Reorder Schemas
 class ReorderRequest(BaseModel):
-    item_ids: List[UUID] = Field(..., min_items=1)
+    item_ids: List[UUID] = Field(..., min_length=1)
 
 
 # Search Schemas
