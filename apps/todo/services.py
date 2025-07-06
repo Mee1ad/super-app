@@ -20,18 +20,18 @@ class ListService:
     
     async def get_all_lists(self) -> ListType[List]:
         """Get all lists ordered by creation date"""
-        return await List.objects.all().order_by("-created_at")
+        return await List.query.all().order_by("-created_at")
     
     async def get_list_by_id(self, list_id: UUID) -> List:
         """Get a list by ID"""
-        list_obj = await List.objects.get(id=list_id)
+        list_obj = await List.query.get(id=list_id)
         if not list_obj:
             raise ObjectNotFound("List not found")
         return list_obj
     
     async def create_list(self, list_data: ListCreate) -> List:
         """Create a new list"""
-        return await List.objects.create(**list_data.dict())
+        return await List.query.create(**list_data.dict())
     
     async def update_list(self, list_id: UUID, list_data: ListUpdate) -> List:
         """Update a list"""
@@ -54,11 +54,11 @@ class TaskService:
     
     async def get_tasks_by_list(self, list_id: UUID) -> ListType[Task]:
         """Get all tasks for a list ordered by position"""
-        return await Task.objects.filter(list_id=list_id).order_by("position")
+        return await Task.query.filter(list_id=list_id).order_by("position")
     
     async def get_task_by_id(self, task_id: UUID) -> Task:
         """Get a task by ID"""
-        task = await Task.objects.get(id=task_id)
+        task = await Task.query.get(id=task_id)
         if not task:
             raise ObjectNotFound("Task not found")
         return task
@@ -66,12 +66,12 @@ class TaskService:
     async def create_task(self, list_id: UUID, task_data: TaskCreate) -> Task:
         """Create a new task in a list"""
         # Get the highest position in the list
-        max_position = await Task.objects.filter(list_id=list_id).max("position") or 0
+        max_position = await Task.query.filter(list_id=list_id).max("position") or 0
         task_data_dict = task_data.dict()
         task_data_dict["position"] = max_position + 1
         task_data_dict["list_id"] = list_id
         
-        return await Task.objects.create(**task_data_dict)
+        return await Task.query.create(**task_data_dict)
     
     async def update_task(self, task_id: UUID, task_data: TaskUpdate) -> Task:
         """Update a task"""
@@ -110,11 +110,11 @@ class ShoppingItemService:
     
     async def get_items_by_list(self, list_id: UUID) -> ListType[ShoppingItem]:
         """Get all shopping items for a list ordered by position"""
-        return await ShoppingItem.objects.filter(list_id=list_id).order_by("position")
+        return await ShoppingItem.query.filter(list_id=list_id).order_by("position")
     
     async def get_item_by_id(self, item_id: UUID) -> ShoppingItem:
         """Get a shopping item by ID"""
-        item = await ShoppingItem.objects.get(id=item_id)
+        item = await ShoppingItem.query.get(id=item_id)
         if not item:
             raise ObjectNotFound("Shopping item not found")
         return item
@@ -122,12 +122,12 @@ class ShoppingItemService:
     async def create_item(self, list_id: UUID, item_data: ShoppingItemCreate) -> ShoppingItem:
         """Create a new shopping item in a list"""
         # Get the highest position in the list
-        max_position = await ShoppingItem.objects.filter(list_id=list_id).max("position") or 0
+        max_position = await ShoppingItem.query.filter(list_id=list_id).max("position") or 0
         item_data_dict = item_data.dict()
         item_data_dict["position"] = max_position + 1
         item_data_dict["list_id"] = list_id
         
-        return await ShoppingItem.objects.create(**item_data_dict)
+        return await ShoppingItem.query.create(**item_data_dict)
     
     async def update_item(self, item_id: UUID, item_data: ShoppingItemUpdate) -> ShoppingItem:
         """Update a shopping item"""
@@ -167,13 +167,13 @@ class SearchService:
     async def search_all(self, query: str) -> dict:
         """Search across all lists, tasks, and shopping items"""
         # Search in lists
-        lists = await List.objects.filter(title__icontains=query).all()
+        lists = await List.query.filter(title__icontains=query).all()
         
         # Search in tasks
-        tasks = await Task.objects.filter(title__icontains=query).all()
+        tasks = await Task.query.filter(title__icontains=query).all()
         
         # Search in shopping items
-        shopping_items = await ShoppingItem.objects.filter(title__icontains=query).all()
+        shopping_items = await ShoppingItem.query.filter(title__icontains=query).all()
         
         return {
             "lists": lists,

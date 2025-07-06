@@ -5,7 +5,7 @@ from enum import Enum
 from edgy import Model, fields
 
 from db.base import BaseModel
-from db.session import database
+from db.session import models_registry
 
 
 class ListType(str, Enum):
@@ -35,7 +35,7 @@ class List(BaseModel):
 
     class Meta:
         tablename = "lists"
-        database = database
+        registry = models_registry
 
 
 class Task(BaseModel):
@@ -58,7 +58,7 @@ class Task(BaseModel):
 
     class Meta:
         tablename = "tasks"
-        database = database
+        registry = models_registry
 
 
 class ShoppingItem(BaseModel):
@@ -83,4 +83,4 @@ class ShoppingItem(BaseModel):
 
     class Meta:
         tablename = "shopping_items"
-        database = database 
+        registry = models_registry 

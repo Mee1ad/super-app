@@ -1,14 +1,13 @@
 # Database session management 
-from edgy import Database
+from edgy import Database, Registry
 from core.config import settings
 
 # Create database instance
 database = Database(settings.database_url)
 
-# Import models to register them with the database
-from apps.todo.models import List, Task, ShoppingItem
+# Create a shared registry instance
+models_registry = Registry(database=database)
 
-# Ensure models are registered with the database
-List.Meta.database = database
-Task.Meta.database = database
-ShoppingItem.Meta.database = database 
+# Import models to register them with the database
+# This will be done after the registry is created
+from apps.todo.models import List, Task, ShoppingItem 
