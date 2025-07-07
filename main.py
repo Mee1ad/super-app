@@ -8,8 +8,22 @@ from apps.todo.endpoints import (
     search
 )
 
-@get(path="/ping")
+@get(
+    path="/ping",
+    tags=["Health"],
+    summary="Health check",
+    description="Simple health check endpoint to verify API availability and status."
+)
 def ping() -> dict:
+    """
+    Health check endpoint.
+    
+    This endpoint provides a simple way to verify that the API is running
+    and accessible. Returns basic status information.
+    
+    Returns:
+        dict: Health status with message and timestamp
+    """
     return {"message": "pong"}
 
 # Robust CORS configuration
