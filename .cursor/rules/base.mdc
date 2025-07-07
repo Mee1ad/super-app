@@ -109,6 +109,12 @@ project/
 * Separate unit and integration tests
 * Use `TestClient(app=...)` from Esmerald
 * Use factories for fake data (e.g. `factory_boy`)
+* **ALWAYS run unit tests and e2e tests after any code changes**
+* **Continue running tests until ALL tests pass before proceeding**
+* **Never commit or deploy code with failing tests**
+* Run tests with: `pytest tests/` for all tests, `pytest tests/unit/` for unit tests, `pytest tests/integration/` for e2e tests
+* Use `pytest -v` for verbose output to see which specific tests are failing
+* Fix any test failures immediately before making additional changes
 
 ### Docs
 
@@ -123,6 +129,9 @@ project/
 * Use `Makefile` or `justfile` for common dev commands
 * Add pre-commit hooks
 * Setup CI (GitHub Actions or others)
+* **Configure CI/CD to run tests automatically on every commit**
+* **Block merges to main branch if any tests fail**
+* **Set up test coverage reporting and maintain minimum coverage thresholds**
 
 ### Monitoring
 
@@ -134,6 +143,9 @@ project/
 * Use consistent naming (snake\_case for files, PascalCase for classes)
 * Group async and sync functions clearly
 * Prefer `async` endpoints for scalability
+* **Write tests for every new feature or bug fix**
+* **Maintain test coverage above 80%**
+* **Test both happy path and edge cases**
 
 ---
 
