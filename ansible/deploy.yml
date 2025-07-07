@@ -164,4 +164,126 @@
 
     - name: Show deployment status
       debug:
-        msg: "Application deployed successfully! Access at http://{{ ansible_default_ipv4.address }}:8000" 
+        msg: "Application deployed successfully! Access at http://{{ ansible_default_ipv4.address }}:8000"
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Enable and start Nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Configure Nginx as reverse proxy
+      copy:
+        dest: /etc/nginx/sites-available/super-app
+        content: |
+          server {
+              listen 80;
+              server_name _;
+
+              location / {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+      notify: Reload Nginx
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/super-app
+        dest: /etc/nginx/sites-enabled/super-app
+        state: link
+        force: yes
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+        force: yes
+
+    - name: Install PostgreSQL
+      apt:
+        name: [postgresql, postgresql-contrib, libpq-dev]
+        state: present
+        update_cache: yes
+
+    - name: Ensure PostgreSQL is running
+      systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Set Postgres password from secret if available
+      become_user: postgres
+      shell: |
+        psql -c "ALTER USER postgres WITH PASSWORD '$(cat {{ secrets_dir }}/db_password 2>/dev/null || echo 'postgres')';"
+      args:
+        executable: /bin/bash
+      when: ansible_file_exists("{{ secrets_dir }}/db_password")
+
+    - name: Create application database
+      become_user: postgres
+      postgresql_db:
+        name: superapp
+        state: present
+
+    - name: Create application db user
+      become_user: postgres
+      postgresql_user:
+        name: superapp
+        password: "{{ lookup('file', secrets_dir + '/db_password') | default('superapp', true) }}"
+        priv: "ALL"
+        state: present
+
+    - name: Grant all privileges on database to user
+      become_user: postgres
+      postgresql_privs:
+        db: superapp
+        role: superapp
+        type: database
+        privs: ALL
+        state: present
+
+    - name: Install UFW firewall
+      apt:
+        name: ufw
+        state: present
+        update_cache: yes
+
+    - name: Allow SSH through firewall
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow HTTP through firewall
+      ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+
+    - name: Allow HTTPS through firewall
+      ufw:
+        rule: allow
+        port: 443
+        proto: tcp
+
+    - name: Enable UFW firewall
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+        logging: on
+
+  handlers:
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded 
