@@ -47,7 +47,7 @@ app = Esmerald(
     openapi_url="/openapi",
     title="LifeHub API",
     version="1.0.0",
-    description="A comprehensive todo and shopping list API",
+    description="A comprehensive REST API for managing todo lists and shopping lists with JWT authentication, real-time search, and bulk operations.",
 )
 
 @app.on_event("startup")

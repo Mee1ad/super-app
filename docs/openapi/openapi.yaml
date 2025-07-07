@@ -1,0 +1,1268 @@
+openapi: 3.0.3
+info:
+  title: LifeHub API
+  description: |
+    A comprehensive REST API for managing todo lists and shopping lists.
+    
+    ## Features
+    - Create and manage todo lists and tasks
+    - Organize shopping lists with prices and sources
+    - Real-time search across all content
+    - Bulk operations and reordering
+    - JWT authentication with role-based permissions
+    
+    ## Getting Started
+    1. Sign up at [lifehub.com](https://lifehub.com)
+    2. Generate your API token in the dashboard
+    3. Include the token in the Authorization header: `Bearer <your-token>`
+    
+    ## Rate Limits
+    - Free Tier: 1,000 requests/hour
+    - Pro Tier: 10,000 requests/hour
+    - Enterprise: Custom limits
+    
+    ## Support
+    - Documentation: [docs.lifehub.com](https://docs.lifehub.com)
+    - Email: [support@lifehub.com](mailto:support@lifehub.com)
+    - Community: [Discord](https://discord.gg/lifehub)
+  version: 1.0.0
+  contact:
+    name: LifeHub API Support
+    email: support@lifehub.com
+    url: https://lifehub.com/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.lifehub.com/v1
+    description: Production server
+  - url: https://staging-api.lifehub.com/v1
+    description: Staging server
+  - url: http://localhost:8000
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /ping:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Simple health check endpoint to verify API availability
+      operationId: ping
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+              example:
+                message: "pong"
+                timestamp: "2024-12-01T10:00:00Z"
+                version: "1.0.0"
+
+  /lists:
+    get:
+      tags:
+        - Lists
+      summary: Get all lists
+      description: Retrieve all lists for the authenticated user
+      operationId: getLists
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/TypeFilterParam'
+      responses:
+        '200':
+          description: Lists retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListCollectionResponse'
+              examples:
+                success:
+                  summary: Success response
+                  value:
+                    data:
+                      - id: "550e8400-e29b-41d4-a716-446655440000"
+                        title: "Work Tasks"
+                        type: "task"
+                        variant: "default"
+                        created_at: "2024-12-01T10:00:00Z"
+                        updated_at: "2024-12-01T10:00:00Z"
+                      - id: "660e8400-e29b-41d4-a716-446655440001"
+                        title: "Grocery Shopping"
+                        type: "shopping"
+                        variant: "outlined"
+                        created_at: "2024-12-01T09:00:00Z"
+                        updated_at: "2024-12-01T09:00:00Z"
+                    meta:
+                      total: 2
+                      page: 1
+                      limit: 20
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+    
+    post:
+      tags:
+        - Lists
+      summary: Create a new list
+      description: Create a new todo or shopping list
+      operationId: createList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListCreate'
+            examples:
+              todo_list:
+                summary: Create a todo list
+                value:
+                  title: "Work Tasks"
+                  type: "task"
+                  variant: "default"
+              shopping_list:
+                summary: Create a shopping list
+                value:
+                  title: "Grocery Shopping"
+                  type: "shopping"
+                  variant: "outlined"
+      responses:
+        '201':
+          description: List created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                title: "Work Tasks"
+                type: "task"
+                variant: "default"
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T10:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /lists/{listId}:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+    
+    get:
+      tags:
+        - Lists
+      summary: Get a specific list
+      description: Retrieve a specific list by ID
+      operationId: getList
+      responses:
+        '200':
+          description: List retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      tags:
+        - Lists
+      summary: Update a list
+      description: Update an existing list's properties
+      operationId: updateList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListUpdate'
+      responses:
+        '200':
+          description: List updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    
+    delete:
+      tags:
+        - Lists
+      summary: Delete a list
+      description: Delete a list and all its associated tasks/items
+      operationId: deleteList
+      responses:
+        '200':
+          description: List deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /lists/{listId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+    
+    get:
+      tags:
+        - Tasks
+      summary: Get tasks in a list
+      description: Retrieve all tasks in a specific list
+      operationId: getTasks
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CheckedFilterParam'
+      responses:
+        '200':
+          description: Tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCollectionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    post:
+      tags:
+        - Tasks
+      summary: Create a new task
+      description: Create a new task in a specific list
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /lists/{listId}/tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+      - $ref: '#/components/parameters/TaskIdParam'
+    
+    get:
+      tags:
+        - Tasks
+      summary: Get a specific task
+      description: Retrieve a specific task by ID
+      operationId: getTask
+      responses:
+        '200':
+          description: Task retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      tags:
+        - Tasks
+      summary: Update a task
+      description: Update an existing task's properties
+      operationId: updateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    
+    delete:
+      tags:
+        - Tasks
+      summary: Delete a task
+      description: Delete a specific task
+      operationId: deleteTask
+      responses:
+        '200':
+          description: Task deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /lists/{listId}/tasks/{taskId}/toggle:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+      - $ref: '#/components/parameters/TaskIdParam'
+    
+    put:
+      tags:
+        - Tasks
+      summary: Toggle task completion
+      description: Toggle the checked status of a task
+      operationId: toggleTask
+      responses:
+        '200':
+          description: Task toggled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /lists/{listId}/tasks/reorder:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+    
+    put:
+      tags:
+        - Tasks
+      summary: Reorder tasks
+      description: Reorder tasks in a list by providing their IDs in the desired order
+      operationId: reorderTasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      responses:
+        '200':
+          description: Tasks reordered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCollectionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /lists/{listId}/items:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+    
+    get:
+      tags:
+        - Shopping Items
+      summary: Get shopping items in a list
+      description: Retrieve all shopping items in a specific list
+      operationId: getItems
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CheckedFilterParam'
+      responses:
+        '200':
+          description: Shopping items retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingItemCollectionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    post:
+      tags:
+        - Shopping Items
+      summary: Create a new shopping item
+      description: Create a new shopping item in a specific list
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShoppingItemCreate'
+      responses:
+        '201':
+          description: Shopping item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /lists/{listId}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+      - $ref: '#/components/parameters/ItemIdParam'
+    
+    get:
+      tags:
+        - Shopping Items
+      summary: Get a specific shopping item
+      description: Retrieve a specific shopping item by ID
+      operationId: getItem
+      responses:
+        '200':
+          description: Shopping item retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      tags:
+        - Shopping Items
+      summary: Update a shopping item
+      description: Update an existing shopping item's properties
+      operationId: updateItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShoppingItemUpdate'
+      responses:
+        '200':
+          description: Shopping item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    
+    delete:
+      tags:
+        - Shopping Items
+      summary: Delete a shopping item
+      description: Delete a specific shopping item
+      operationId: deleteItem
+      responses:
+        '200':
+          description: Shopping item deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /lists/{listId}/items/{itemId}/toggle:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+      - $ref: '#/components/parameters/ItemIdParam'
+    
+    put:
+      tags:
+        - Shopping Items
+      summary: Toggle shopping item completion
+      description: Toggle the checked status of a shopping item
+      operationId: toggleItem
+      responses:
+        '200':
+          description: Shopping item toggled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /lists/{listId}/items/reorder:
+    parameters:
+      - $ref: '#/components/parameters/ListIdParam'
+    
+    put:
+      tags:
+        - Shopping Items
+      summary: Reorder shopping items
+      description: Reorder shopping items in a list by providing their IDs in the desired order
+      operationId: reorderItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      responses:
+        '200':
+          description: Shopping items reordered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShoppingItemCollectionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /search:
+    get:
+      tags:
+        - Search
+      summary: Search across all content
+      description: Search for lists, tasks, and shopping items across all user content
+      operationId: search
+      parameters:
+        - $ref: '#/components/parameters/SearchQueryParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Search results retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Bearer token authentication.
+        
+        Include your API token in the Authorization header:
+        ```
+        Authorization: Bearer <your-jwt-token>
+        ```
+        
+        Get your token from the [LifeHub dashboard](https://lifehub.com/dashboard/api-tokens).
+
+  parameters:
+    ListIdParam:
+      name: listId
+      in: path
+      required: true
+      description: Unique identifier for the list
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    TaskIdParam:
+      name: taskId
+      in: path
+      required: true
+      description: Unique identifier for the task
+      schema:
+        type: string
+        format: uuid
+        example: "660e8400-e29b-41d4-a716-446655440001"
+    
+    ItemIdParam:
+      name: itemId
+      in: path
+      required: true
+      description: Unique identifier for the shopping item
+      schema:
+        type: string
+        format: uuid
+        example: "770e8400-e29b-41d4-a716-446655440002"
+    
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: Page number for pagination (starts from 1)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+    
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Number of items per page (max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+    
+    TypeFilterParam:
+      name: type
+      in: query
+      required: false
+      description: Filter lists by type
+      schema:
+        $ref: '#/components/schemas/ListType'
+    
+    CheckedFilterParam:
+      name: checked
+      in: query
+      required: false
+      description: Filter by completion status
+      schema:
+        type: boolean
+        example: false
+    
+    SearchQueryParam:
+      name: q
+      in: query
+      required: true
+      description: Search query string (minimum 2 characters)
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 100
+        example: "groceries"
+
+  schemas:
+    # Enums
+    ListType:
+      type: string
+      enum: [task, shopping]
+      description: Type of list
+      example: "task"
+    
+    Variant:
+      type: string
+      enum: [default, outlined, filled]
+      description: Visual variant for UI styling
+      example: "default"
+    
+    # Base Models
+    ListBase:
+      type: object
+      required:
+        - title
+        - type
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Title of the list
+          example: "Work Tasks"
+        type:
+          $ref: '#/components/schemas/ListType'
+        variant:
+          $ref: '#/components/schemas/Variant'
+          default: "default"
+    
+    TaskBase:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Title of the task
+          example: "Complete project documentation"
+        description:
+          type: string
+          maxLength: 1000
+          description: Optional description of the task
+          example: "Write comprehensive API documentation"
+        checked:
+          type: boolean
+          default: false
+          description: Whether the task is completed
+          example: false
+        variant:
+          $ref: '#/components/schemas/Variant'
+          default: "default"
+        position:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Position in the list for ordering
+          example: 0
+    
+    ShoppingItemBase:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Title of the shopping item
+          example: "Organic Bananas"
+        url:
+          type: string
+          maxLength: 500
+          format: uri
+          description: Optional URL to the product
+          example: "https://example.com/product/bananas"
+        price:
+          type: string
+          maxLength: 50
+          description: Price of the item
+          example: "$2.99"
+        source:
+          type: string
+          maxLength: 255
+          description: Source/store for the item
+          example: "Whole Foods"
+        checked:
+          type: boolean
+          default: false
+          description: Whether the item is purchased
+          example: false
+        variant:
+          $ref: '#/components/schemas/Variant'
+          default: "default"
+        position:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Position in the list for ordering
+          example: 0
+    
+    # Create Models
+    ListCreate:
+      allOf:
+        - $ref: '#/components/schemas/ListBase'
+    
+    TaskCreate:
+      allOf:
+        - $ref: '#/components/schemas/TaskBase'
+    
+    ShoppingItemCreate:
+      allOf:
+        - $ref: '#/components/schemas/ShoppingItemBase'
+    
+    # Update Models
+    ListUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: New title for the list
+          example: "Updated Work Tasks"
+        variant:
+          $ref: '#/components/schemas/Variant'
+    
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: New title for the task
+          example: "Updated task title"
+        description:
+          type: string
+          maxLength: 1000
+          description: New description for the task
+          example: "Updated task description"
+        checked:
+          type: boolean
+          description: New completion status
+          example: true
+        variant:
+          $ref: '#/components/schemas/Variant'
+        position:
+          type: integer
+          minimum: 0
+          description: New position in the list
+          example: 1
+    
+    ShoppingItemUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: New title for the shopping item
+          example: "Updated item title"
+        url:
+          type: string
+          maxLength: 500
+          format: uri
+          description: New URL for the item
+          example: "https://example.com/updated-product"
+        price:
+          type: string
+          maxLength: 50
+          description: New price for the item
+          example: "$3.99"
+        source:
+          type: string
+          maxLength: 255
+          description: New source for the item
+          example: "Updated Store"
+        checked:
+          type: boolean
+          description: New purchase status
+          example: true
+        variant:
+          $ref: '#/components/schemas/Variant'
+        position:
+          type: integer
+          minimum: 0
+          description: New position in the list
+          example: 1
+    
+    # Response Models
+    ListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ListBase'
+        - type: object
+          required:
+            - id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for the list
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+    
+    TaskResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskBase'
+        - type: object
+          required:
+            - id
+            - list_id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for the task
+              example: "660e8400-e29b-41d4-a716-446655440001"
+            list_id:
+              type: string
+              format: uuid
+              description: ID of the parent list
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+    
+    ShoppingItemResponse:
+      allOf:
+        - $ref: '#/components/schemas/ShoppingItemBase'
+        - type: object
+          required:
+            - id
+            - list_id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for the shopping item
+              example: "770e8400-e29b-41d4-a716-446655440002"
+            list_id:
+              type: string
+              format: uuid
+              description: ID of the parent list
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+    
+    # Collection Responses
+    ListCollectionResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListResponse'
+          description: Array of lists
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    
+    TaskCollectionResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskResponse'
+          description: Array of tasks
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    
+    ShoppingItemCollectionResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingItemResponse'
+          description: Array of shopping items
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    
+    # Utility Models
+    ReorderRequest:
+      type: object
+      required:
+        - item_ids
+      properties:
+        item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          description: Array of item IDs in the desired order
+          example: ["660e8400-e29b-41d4-a716-446655440001", "770e8400-e29b-41d4-a716-446655440002"]
+    
+    SearchResponse:
+      type: object
+      properties:
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListResponse'
+          description: Matching lists
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskResponse'
+          description: Matching tasks
+        shopping_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingItemResponse'
+          description: Matching shopping items
+        meta:
+          $ref: '#/components/schemas/SearchMeta'
+    
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total number of items
+          example: 100
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        limit:
+          type: integer
+          description: Items per page
+          example: 20
+        pages:
+          type: integer
+          description: Total number of pages
+          example: 5
+    
+    SearchMeta:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query used
+          example: "groceries"
+        total_results:
+          type: integer
+          description: Total number of results
+          example: 15
+        lists_count:
+          type: integer
+          description: Number of matching lists
+          example: 2
+        tasks_count:
+          type: integer
+          description: Number of matching tasks
+          example: 8
+        items_count:
+          type: integer
+          description: Number of matching shopping items
+          example: 5
+    
+    PingResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Health check message
+          example: "pong"
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server timestamp
+          example: "2024-12-01T10:00:00Z"
+        version:
+          type: string
+          description: API version
+          example: "1.0.0"
+    
+    DeleteResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+          example: "Resource deleted successfully"
+        deleted_at:
+          type: string
+          format: date-time
+          description: Deletion timestamp
+          example: "2024-12-01T10:00:00Z"
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid input data"
+              details:
+                - field: "title"
+                  issue: "Field is required"
+                  value: null
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    Unauthorized:
+      description: Authentication required or failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "AUTH_REQUIRED"
+              message: "Authentication required"
+              details:
+                header: "Authorization"
+                format: "Bearer <token>"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    Forbidden:
+      description: Authenticated but not authorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "INSUFFICIENT_PERMISSIONS"
+              message: "Insufficient permissions for this resource"
+              details:
+                required: "write:lists"
+                provided: "read:lists"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "RESOURCE_NOT_FOUND"
+              message: "Resource not found"
+              details:
+                resource: "list"
+                id: "550e8400-e29b-41d4-a716-446655440000"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    ValidationError:
+      description: Validation errors in request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Validation failed"
+              details:
+                - field: "title"
+                  issue: "Field is required"
+                  value: null
+                - field: "email"
+                  issue: "Invalid email format"
+                  value: "invalid-email"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Request limit per window
+          schema:
+            type: integer
+            example: 1000
+        X-RateLimit-Remaining:
+          description: Remaining requests
+          schema:
+            type: integer
+            example: 0
+        X-RateLimit-Reset:
+          description: Reset time (Unix timestamp)
+          schema:
+            type: integer
+            example: 1640998800
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+            example: 3600
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "RATE_LIMIT_EXCEEDED"
+              message: "Rate limit exceeded"
+              details:
+                limit: 1000
+                reset_time: "2024-12-01T11:00:00Z"
+                retry_after: 3600
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"
+              details:
+                incident_id: "inc_1234567890abcdef"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - request_id
+            - timestamp
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Invalid input data"
+            details:
+              oneOf:
+                - type: object
+                - type: array
+                  items:
+                    type: object
+              description: Additional error details
+              example:
+                field: "title"
+                issue: "Field is required"
+            request_id:
+              type: string
+              description: Unique request identifier for support
+              example: "req_1234567890abcdef"
+            timestamp:
+              type: string
+              format: date-time
+              description: Error timestamp
+              example: "2024-12-01T10:00:00Z"
+
+tags:
+  - name: Health
+    description: Health check and status endpoints
+  - name: Lists
+    description: List management operations
+  - name: Tasks
+    description: Task management operations within lists
+  - name: Shopping Items
+    description: Shopping item management operations within lists
+  - name: Search
+    description: Global search functionality 
