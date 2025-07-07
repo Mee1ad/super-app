@@ -1,4 +1,4 @@
-from esmerald import Esmerald, Gateway, get, CORSConfig
+from esmerald import Esmerald, Gateway, get, CORSConfig, Include
 from core.config import settings
 from db.session import database
 from apps.todo.endpoints import (
@@ -26,6 +26,107 @@ def ping() -> dict:
     """
     return {"message": "pong"}
 
+@get(
+    path="/deployment",
+    tags=["Deployment"],
+    summary="Deployment & Operations Guide",
+    description="""# 🚀 Deployment
+
+This API is deployed using Docker containers with automated CI/CD through GitHub Actions and Ansible.
+
+## Production Environment
+
+- **URL**: `http://YOUR_SERVER_IP:8000`
+- **Health Check**: `GET /ping`
+- **Documentation**: `GET /openapi`
+
+## Deployment Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   GitHub Repo   │───▶│  GitHub Actions  │───▶│  Ubuntu Server  │
+│                 │    │   (CI/CD)        │    │   (Production)  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │                        │
+                              ▼                        ▼
+                       ┌─────────────┐        ┌─────────────────┐
+                       │ GitHub CR   │        │ Docker Container│
+                       │ (Registry)  │        │ (Port 8000)     │
+                       └─────────────┘        └─────────────────┘
+```
+
+## Deployment Components
+
+1. **Docker Containerization**
+   - Multi-stage build for optimized images
+   - Non-root user for security
+   - Health checks and monitoring
+   - Docker secrets for sensitive data
+
+2. **Automated CI/CD Pipeline**
+   - GitHub Actions workflow on push to main
+   - Automatic Docker image building and pushing
+   - Ansible playbook for server deployment
+   - Zero-downtime deployments
+
+3. **Infrastructure as Code**
+   - Ansible playbooks for server setup
+   - Docker Compose for container orchestration
+   - Automated system updates and security patches
+
+## Environment Variables
+
+- `API_KEY_FILE=/run/secrets/api_key` - API authentication key
+- `DB_PASSWORD_FILE=/run/secrets/db_password` - Database password
+
+## Monitoring and Health Checks
+
+- **Health Endpoint**: `GET /ping`
+- **Docker Health Check**: Automatic container health monitoring
+- **Application Logs**: `docker logs super-app-api`
+
+## Security Features
+
+- Non-root container execution
+- Docker secrets for sensitive data
+- SSH key-based server access
+- Dedicated application user with limited privileges
+- CORS configuration for frontend integration
+
+## Development vs Production
+
+| Environment | URL | Database | Authentication |
+|-------------|-----|----------|----------------|
+| Development | `http://localhost:8000` | Local SQLite | Development keys |
+| Production | `http://YOUR_SERVER_IP:8000` | PostgreSQL | Production secrets |
+
+## Troubleshooting
+
+**Common Issues:**
+- Port 8000 not accessible: Check firewall settings
+- Container not starting: Check Docker logs
+- Database connection failed: Verify secrets configuration
+
+**Manual Commands:**
+```bash
+# Check container status
+docker ps
+
+# View application logs
+docker logs super-app-api
+
+# Test health endpoint
+curl http://localhost:8000/ping
+
+# SSH into server
+ssh -i ./secrets/id_rsa superapp@YOUR_SERVER_IP
+```
+"""
+)
+def deployment_info() -> dict:
+    """Deployment and operations documentation endpoint."""
+    return {"message": "See the documentation tab for deployment instructions."}
+
 # Robust CORS configuration
 cors_config = CORSConfig(
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -38,30 +139,138 @@ cors_config = CORSConfig(
 app = Esmerald(
     routes=[
         Gateway(handler=ping),
-        get_lists,
-        create_list,
-        update_list,
-        delete_list,
-        get_tasks,
-        create_task,
-        update_task,
-        delete_task,
-        toggle_task,
-        reorder_tasks,
-        get_items,
-        create_item,
-        update_item,
-        delete_item,
-        toggle_item,
-        reorder_items,
-        search,
+        Gateway(handler=get_lists),
+        Gateway(handler=create_list),
+        Gateway(handler=update_list),
+        Gateway(handler=delete_list),
+        Gateway(handler=get_tasks),
+        Gateway(handler=create_task),
+        Gateway(handler=update_task),
+        Gateway(handler=delete_task),
+        Gateway(handler=toggle_task),
+        Gateway(handler=reorder_tasks),
+        Gateway(handler=get_items),
+        Gateway(handler=create_item),
+        Gateway(handler=update_item),
+        Gateway(handler=delete_item),
+        Gateway(handler=toggle_item),
+        Gateway(handler=reorder_items),
+        Gateway(handler=search),
+        Gateway(handler=deployment_info),
     ],
     cors_config=cors_config,
     enable_openapi=True,
     openapi_url="/openapi",
     title="LifeHub API",
     version="1.0.0",
-    description="A comprehensive REST API for managing todo lists and shopping lists with JWT authentication, real-time search, and bulk operations.",
+    description="""# LifeHub API
+
+A comprehensive REST API for managing todo lists and shopping lists with JWT authentication, real-time search, and bulk operations.
+
+## 📚 API Overview
+
+This API provides comprehensive endpoints for:
+- Todo list management (CRUD operations)
+- Task management with ordering and toggling
+- Shopping list functionality
+- Real-time search capabilities
+- Bulk operations for efficiency
+
+All endpoints include proper error handling, validation, and comprehensive documentation.
+
+## 🚀 Deployment
+
+This API is deployed using Docker containers with automated CI/CD through GitHub Actions and Ansible.
+
+### Production Environment
+
+- **URL**: `http://YOUR_SERVER_IP:8000`
+- **Health Check**: `GET /ping`
+- **Documentation**: `GET /openapi`
+
+### Deployment Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   GitHub Repo   │───▶│  GitHub Actions  │───▶│  Ubuntu Server  │
+│                 │    │   (CI/CD)        │    │   (Production)  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │                        │
+                              ▼                        ▼
+                       ┌─────────────┐        ┌─────────────────┐
+                       │ GitHub CR   │        │ Docker Container│
+                       │ (Registry)  │        │ (Port 8000)     │
+                       └─────────────┘        └─────────────────┘
+```
+
+### Deployment Components
+
+1. **Docker Containerization**
+   - Multi-stage build for optimized images
+   - Non-root user for security
+   - Health checks and monitoring
+   - Docker secrets for sensitive data
+
+2. **Automated CI/CD Pipeline**
+   - GitHub Actions workflow on push to main
+   - Automatic Docker image building and pushing
+   - Ansible playbook for server deployment
+   - Zero-downtime deployments
+
+3. **Infrastructure as Code**
+   - Ansible playbooks for server setup
+   - Docker Compose for container orchestration
+   - Automated system updates and security patches
+
+### Environment Variables
+
+The application uses Docker secrets for sensitive configuration:
+
+- `API_KEY_FILE=/run/secrets/api_key` - API authentication key
+- `DB_PASSWORD_FILE=/run/secrets/db_password` - Database password
+
+### Monitoring and Health Checks
+
+- **Health Endpoint**: `GET /ping` - Returns application status
+- **Docker Health Check**: Automatic container health monitoring
+- **Application Logs**: Available via `docker logs super-app-api`
+
+### Security Features
+
+- Non-root container execution
+- Docker secrets for sensitive data
+- SSH key-based server access
+- Dedicated application user with limited privileges
+- CORS configuration for frontend integration
+
+### Development vs Production
+
+| Environment | URL | Database | Authentication |
+|-------------|-----|----------|----------------|
+| Development | `http://localhost:8000` | Local SQLite | Development keys |
+| Production | `http://YOUR_SERVER_IP:8000` | PostgreSQL | Production secrets |
+
+### Troubleshooting
+
+**Common Issues:**
+- Port 8000 not accessible: Check firewall settings
+- Container not starting: Check Docker logs
+- Database connection failed: Verify secrets configuration
+
+**Manual Commands:**
+```bash
+# Check container status
+docker ps
+
+# View application logs
+docker logs super-app-api
+
+# Test health endpoint
+curl http://localhost:8000/ping
+
+# SSH into server
+ssh -i ./secrets/id_rsa superapp@YOUR_SERVER_IP
+```""",
 )
 
 @app.on_event("startup")

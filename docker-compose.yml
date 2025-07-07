@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/super-app-backend}:latest
+    container_name: super-app-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    secrets:
+      - api_key
+      - db_password
+    environment:
+      - API_KEY_FILE=/run/secrets/api_key
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+secrets:
+  api_key:
+    file: /run/secrets/api_key
+  db_password:
+    file: /run/secrets/db_password
+
+networks:
+  app-network:
+    driver: bridge 

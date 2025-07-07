@@ -191,4 +191,8 @@ Thumbs.db
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+# Deployment secrets
+secrets/*
+!secrets/.gitkeep 
