@@ -106,9 +106,14 @@ project/
 * Separate unit and integration tests
 * Use `TestClient(app=...)` from Esmerald
 * Use factories for fake data (e.g. `factory_boy`)
+* **ALWAYS write comprehensive tests for any new code or changes**
+* **Write ALL required test types: unit tests, integration tests, error scenario tests**
+* **Test both success cases and failure scenarios for every endpoint**
+* **Include tests for validation errors, not found errors, authentication errors, and edge cases**
 * **ALWAYS run unit tests and e2e tests after any code changes**
 * **Continue running tests until ALL tests pass before proceeding**
 * **Never commit or deploy code with failing tests**
+* **Iterate over tests until ALL tests pass - fix failures immediately**
 * Run tests with: `pytest tests/` for all tests, `pytest tests/unit/` for unit tests, `pytest tests/integration/` for e2e tests
 * Use `pytest -v` for verbose output to see which specific tests are failing
 * Fix any test failures immediately before making additional changes
