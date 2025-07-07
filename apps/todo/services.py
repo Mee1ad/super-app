@@ -74,11 +74,19 @@ class TaskService:
         
         return await Task.query.create(**task_data_dict)
     
-    async def update_task(self, task_id: UUID, task_data: TaskUpdate) -> Task:
-        """Update a task"""
+    async def update_task(self, task_id: UUID, task_data: TaskUpdate, list_id: UUID = None) -> Task:
+        """Update a task and ensure the returned object has a valid list reference for serialization."""
         task = await self.get_task_by_id(task_id)
         update_data = {k: v for k, v in task_data.dict().items() if v is not None}
-        return await task.update(**update_data)
+        updated_task = await task.update(**update_data)
+        # Patch: ensure the returned object has a valid list or list_id
+        if not getattr(updated_task, 'list', None):
+            # If the ORM expects a foreign key relation, set it
+            if list_id:
+                updated_task.list = list_id
+            elif task_data.list_id:
+                updated_task.list = task_data.list_id
+        return updated_task
     
     async def delete_task(self, task_id: UUID) -> bool:
         """Delete a task"""
@@ -131,11 +139,18 @@ class ShoppingItemService:
         
         return await ShoppingItem.query.create(**item_data_dict)
     
-    async def update_item(self, item_id: UUID, item_data: ShoppingItemUpdate) -> ShoppingItem:
-        """Update a shopping item"""
+    async def update_item(self, item_id: UUID, item_data: ShoppingItemUpdate, list_id: UUID = None) -> ShoppingItem:
+        """Update a shopping item and ensure the returned object has a valid list reference for serialization."""
         item = await self.get_item_by_id(item_id)
         update_data = {k: v for k, v in item_data.dict().items() if v is not None}
-        return await item.update(**update_data)
+        updated_item = await item.update(**update_data)
+        # Patch: ensure the returned object has a valid list or list_id
+        if not getattr(updated_item, 'list', None):
+            if list_id:
+                updated_item.list = list_id
+            elif item_data.list_id:
+                updated_item.list = item_data.list_id
+        return updated_item
     
     async def delete_item(self, item_id: UUID) -> bool:
         """Delete a shopping item"""

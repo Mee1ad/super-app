@@ -56,6 +56,7 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
+    list_id: Optional[UUID] = Field(None, description="ID of the parent list (optional, for update)")
     title: Optional[str] = Field(None, min_length=1, max_length=255, description="New title for the task")
     description: Optional[str] = Field(None, description="New description for the task")
     checked: Optional[bool] = Field(None, description="New completion status")
@@ -73,12 +74,16 @@ class TaskResponse(TaskBase):
     
     @classmethod
     def from_orm(cls, obj):
-        # Extract list_id from the nested list object
         data = obj.dict() if hasattr(obj, 'dict') else obj
-        if 'list' in data and isinstance(data['list'], dict) and 'id' in data['list']:
+        # If list_id is present directly, use it
+        if 'list_id' in data and data['list_id']:
+            pass  # already present
+        elif 'list' in data and isinstance(data['list'], dict) and 'id' in data['list']:
             data['list_id'] = data['list']['id']
         elif 'list' in data and hasattr(data['list'], 'id'):
             data['list_id'] = data['list'].id
+        elif hasattr(obj, 'list_id'):
+            data['list_id'] = getattr(obj, 'list_id')
         return cls(**data)
 
 
@@ -98,6 +103,7 @@ class ShoppingItemCreate(ShoppingItemBase):
 
 
 class ShoppingItemUpdate(BaseModel):
+    list_id: Optional[UUID] = Field(None, description="ID of the parent list (optional, for update)")
     title: Optional[str] = Field(None, min_length=1, max_length=255, description="New title for the shopping item")
     url: Optional[str] = Field(None, max_length=500, description="New URL for the item")
     price: Optional[str] = Field(None, max_length=50, description="New price for the item")
@@ -117,12 +123,16 @@ class ShoppingItemResponse(ShoppingItemBase):
     
     @classmethod
     def from_orm(cls, obj):
-        # Extract list_id from the nested list object
         data = obj.dict() if hasattr(obj, 'dict') else obj
-        if 'list' in data and isinstance(data['list'], dict) and 'id' in data['list']:
+        # If list_id is present directly, use it
+        if 'list_id' in data and data['list_id']:
+            pass  # already present
+        elif 'list' in data and isinstance(data['list'], dict) and 'id' in data['list']:
             data['list_id'] = data['list']['id']
         elif 'list' in data and hasattr(data['list'], 'id'):
             data['list_id'] = data['list'].id
+        elif hasattr(obj, 'list_id'):
+            data['list_id'] = getattr(obj, 'list_id')
         return cls(**data)
 
 

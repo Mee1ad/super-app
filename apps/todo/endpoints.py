@@ -218,7 +218,7 @@ async def update_task(list_id: UUID, task_id: UUID, data: TaskUpdate) -> TaskRes
         422: Validation error - Provided fields contain invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    task = await task_service.update_task(task_id, data)
+    task = await task_service.update_task(task_id, data, list_id=list_id)
     return TaskResponse.from_orm(task)
 
 @delete(
@@ -396,7 +396,7 @@ async def update_item(list_id: UUID, item_id: UUID, data: ShoppingItemUpdate) ->
         422: Validation error - Provided fields contain invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    item = await shopping_item_service.update_item(item_id, data)
+    item = await shopping_item_service.update_item(item_id, data, list_id=list_id)
     return ShoppingItemResponse.from_orm(item)
 
 @delete(
