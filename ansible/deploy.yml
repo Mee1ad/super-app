@@ -29,9 +29,6 @@
           - apt-transport-https
           - ca-certificates
           - software-properties-common
-          - python3-pip
-          - python3-setuptools
-          - python3-wheel
         state: present
 
     - name: Create application user
@@ -56,6 +53,12 @@
         group: "{{ app_group }}"
         mode: '0700'
 
+    # Check if SSH public key exists
+    - name: Check if SSH public key exists
+      stat:
+        path: "{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub"
+      register: ssh_pubkey_stat
+
     - name: Copy SSH public key
       copy:
         src: "{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub"
@@ -63,19 +66,74 @@
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0600'
-      when: ansible_file_exists("{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub")
+      when: ssh_pubkey_stat.stat.exists
+
+    - name: Debug Ubuntu version
+      debug:
+        msg: "Ubuntu version: {{ ansible_distribution_version }} ({{ ansible_distribution_release }})"
+
+    - name: Install Docker dependencies
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: yes
+
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
 
     - name: Add Docker GPG key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+      check_mode: no
+
+    - name: Set permissions on Docker GPG key
+      file:
+        path: /etc/apt/keyrings/docker.gpg
+        mode: '0644'
+      when: ansible_check_mode == false or (ansible_check_mode and lookup('file', '/etc/apt/keyrings/docker.gpg', errors='ignore') != '')
 
     - name: Add Docker repository
-      apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+      check_mode: no
 
-    - name: Install Docker
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+
+    - name: Debug Docker repository file
+      shell: cat /etc/apt/sources.list.d/docker.list
+      register: docker_repo_content
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Show Docker repository content
+      debug:
+        var: docker_repo_content.stdout_lines
+      when: docker_repo_content is defined
+
+    - name: Debug available Docker packages after repo addition
+      shell: apt-cache search docker-ce
+      register: docker_packages_after
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Show available Docker packages
+      debug:
+        var: docker_packages_after.stdout_lines
+      when: docker_packages_after is defined
+
+    - name: Install Docker Engine
       apt:
         name:
           - docker-ce
@@ -85,6 +143,74 @@
           - docker-compose-plugin
         state: present
         update_cache: yes
+      when: not ansible_check_mode
+      ignore_errors: yes
+
+    - name: Skip Docker installation in check mode
+      debug:
+        msg: "Docker installation skipped in check mode - packages would be installed in real run"
+      when: ansible_check_mode
+
+    - name: Check if Docker is installed
+      stat:
+        path: /usr/bin/docker
+      register: docker_binary_check
+
+    - name: Check if Docker daemon is installed
+      stat:
+        path: /usr/bin/dockerd
+      register: dockerd_binary_check
+
+    - name: Get Docker version
+      shell: docker --version
+      register: docker_version
+      changed_when: false
+      when: docker_binary_check.stat.exists
+      ignore_errors: yes
+
+    - name: Debug Docker installation status
+      debug:
+        msg: |
+          Docker binary exists: {{ docker_binary_check.stat.exists }}
+          Docker daemon exists: {{ dockerd_binary_check.stat.exists }}
+          Docker version: {{ docker_version.stdout if docker_version is defined and ('rc' in docker_version) and docker_version.rc == 0 else 'Not available' }}
+
+    - name: Check Docker service status
+      shell: systemctl is-active docker
+      register: docker_service_status
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Debug Docker service status
+      debug:
+        msg: "Docker service status: {{ docker_service_status.stdout if docker_service_status is defined else 'Service not found' }}"
+
+    - name: Start Docker service if not running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      when: docker_service_status is defined and docker_service_status.rc != 0 and not ansible_check_mode
+      ignore_errors: yes
+
+    - name: Alternative Docker service start (using dockerd)
+      shell: |
+        systemctl daemon-reload
+        systemctl start docker
+        systemctl enable docker
+      when: docker_service_status is defined and docker_service_status.rc != 0 and not ansible_check_mode
+      ignore_errors: yes
+
+    - name: Verify Docker is running
+      shell: docker info
+      register: docker_info
+      changed_when: false
+      when: docker_binary_check.stat.exists
+      ignore_errors: yes
+
+    - name: Debug Docker info
+      debug:
+        msg: "Docker info: {{ docker_info.stdout if docker_info is defined and ('stdout' in docker_info) else 'Docker not running' }}"
 
     - name: Add user to docker group
       user:
@@ -92,18 +218,24 @@
         groups: docker
         append: yes
 
-    - name: Enable and start Docker service
-      systemd:
-        name: docker
-        state: started
-        enabled: yes
-
     - name: Login to GitHub Container Registry
       docker_login:
         registry: ghcr.io
         username: "{{ lookup('env', 'GITHUB_USERNAME', default='your-username') }}"
         password: "{{ github_token }}"
-      when: github_token is defined
+      when: github_token is defined and docker_info is defined and (not ansible_check_mode) and docker_binary_check.stat.exists
+      ignore_errors: yes
+      register: github_login_result
+
+    - name: Debug GitHub login status
+      debug:
+        msg: "GitHub Container Registry login: {{ 'Success' if github_login_result is defined and github_login_result.changed else 'Skipped or Failed' }}"
+      when: github_token is defined and (not ansible_check_mode) and docker_binary_check.stat.exists
+
+    - name: Skip Docker operations in check mode
+      debug:
+        msg: "Docker operations (login, pull, compose) would be performed in real run"
+      when: ansible_check_mode
 
     - name: Create application directory
       file:
@@ -121,6 +253,11 @@
         group: root
         mode: '0700'
 
+    - name: Check if local secrets directory exists
+      stat:
+        path: "{{ local_secrets_dir }}"
+      register: local_secrets_dir_stat
+
     - name: Copy secret files
       copy:
         src: "{{ local_secrets_dir }}/"
@@ -128,7 +265,7 @@
         owner: root
         group: root
         mode: '0600'
-      when: ansible_file_exists("{{ local_secrets_dir }}")
+      when: local_secrets_dir_stat.stat.exists
 
     - name: Copy docker-compose.yml
       copy:
@@ -137,6 +274,7 @@
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0644'
+      when: not ansible_check_mode
 
     - name: Pull latest Docker image
       docker_image:
@@ -144,18 +282,79 @@
         source: pull
         force_source: yes
       become_user: "{{ app_user }}"
+      when: not ansible_check_mode
+
+    - name: Install PostgreSQL
+      apt:
+        update_cache: yes
+        cache_valid_time: 0
+      register: apt_update_result
+
+    - name: Check available PostgreSQL packages
+      shell: apt-cache search postgresql
+      register: postgresql_packages
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Debug available PostgreSQL packages
+      debug:
+        var: postgresql_packages.stdout_lines
+      when: postgresql_packages is defined
 
     - name: Install PostgreSQL
       apt:
         name: [postgresql, postgresql-contrib, libpq-dev]
         state: present
         update_cache: yes
+      register: postgresql_install_result
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Debug PostgreSQL installation result
+      debug:
+        var: postgresql_install_result
+      when: postgresql_install_result is defined
+
+    - name: Add PostgreSQL official repository if apt install failed
+      shell: |
+        # Add PostgreSQL official repository
+        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+        sudo apt-get update
+      when: postgresql_install_result is failed and not ansible_check_mode
+      register: postgresql_repo_result
+      ignore_errors: yes
+
+    - name: Install PostgreSQL from official repo if needed
+      apt:
+        name: [postgresql-16, postgresql-contrib, libpq-dev]
+        state: present
+        update_cache: yes
+      when: postgresql_install_result is failed and not ansible_check_mode
+      register: postgresql_official_install_result
+      ignore_errors: yes
+
+    - name: Debug PostgreSQL official installation result
+      debug:
+        var: postgresql_official_install_result
+      when: postgresql_official_install_result is defined
 
     - name: Ensure PostgreSQL is running
       systemd:
         name: postgresql
         state: started
         enabled: yes
+      when: not ansible_check_mode
+
+    - name: Skip PostgreSQL installation in check mode
+      debug:
+        msg: "PostgreSQL installation skipped in check mode - packages would be installed in real run"
+      when: ansible_check_mode
+
+    - name: Check if db_password file exists
+      stat:
+        path: "{{ secrets_dir }}/db_password"
+      register: db_password_file
 
     - name: Set Postgres password from secret if available
       become_user: postgres
@@ -163,13 +362,14 @@
         psql -c "ALTER USER postgres WITH PASSWORD '$(cat {{ secrets_dir }}/db_password 2>/dev/null || echo 'postgres')';"
       args:
         executable: /bin/bash
-      when: ansible_file_exists("{{ secrets_dir }}/db_password")
+      when: db_password_file.stat.exists and not ansible_check_mode
 
     - name: Create application database
       become_user: postgres
       postgresql_db:
         name: superapp
         state: present
+      when: not ansible_check_mode
 
     - name: Create application db user
       become_user: postgres
@@ -178,6 +378,7 @@
         password: "{{ lookup('file', secrets_dir + '/db_password') | default('superapp', true) }}"
         priv: "ALL"
         state: present
+      when: not ansible_check_mode
 
     - name: Grant all privileges on database to user
       become_user: postgres
@@ -187,20 +388,27 @@
         type: database
         privs: ALL
         state: present
+      when: not ansible_check_mode
+
+    - name: Skip database operations in check mode
+      debug:
+        msg: "Database operations (password set, user/db creation) would be performed in real run"
+      when: ansible_check_mode
 
     - name: Stop existing containers
-      docker_compose:
-        project_src: "{{ app_dir }}"
-        state: absent
+      shell: |
+        cd {{ app_dir }}
+        docker-compose down
       become_user: "{{ app_user }}"
       ignore_errors: yes
+      when: not ansible_check_mode
 
     - name: Start application with docker-compose
-      docker_compose:
-        project_src: "{{ app_dir }}"
-        state: present
-        pull: yes
+      shell: |
+        cd {{ app_dir }}
+        docker-compose up -d --pull always
       become_user: "{{ app_user }}"
+      when: not ansible_check_mode
 
     - name: Wait for application to be ready
       uri:
@@ -212,22 +420,36 @@
       retries: 30
       delay: 10
       ignore_errors: yes
+      when: not ansible_check_mode
 
     - name: Show deployment status
       debug:
         msg: "Application deployed successfully! Access at http://{{ ansible_default_ipv4.address }}:8000"
+      when: not ansible_check_mode
+
+    - name: Skip application deployment in check mode
+      debug:
+        msg: "Application deployment (docker-compose, health checks) would be performed in real run"
+      when: ansible_check_mode
 
     - name: Install Nginx
       apt:
         name: nginx
         state: present
         update_cache: yes
+      when: not ansible_check_mode
+
+    - name: Skip Nginx installation in check mode
+      debug:
+        msg: "Nginx installation skipped in check mode - would be installed in real run"
+      when: ansible_check_mode
 
     - name: Enable and start Nginx
       systemd:
         name: nginx
         state: started
         enabled: yes
+      when: not ansible_check_mode
 
     - name: Configure Nginx as reverse proxy
       copy:
@@ -246,6 +468,12 @@
               }
           }
       notify: Reload Nginx
+      when: not ansible_check_mode
+
+    - name: Skip Nginx configuration in check mode
+      debug:
+        msg: "Nginx configuration would be applied in real run"
+      when: ansible_check_mode
 
     - name: Enable Nginx site
       file:
@@ -253,35 +481,46 @@
         dest: /etc/nginx/sites-enabled/super-app
         state: link
         force: yes
+      when: not ansible_check_mode
 
     - name: Remove default Nginx site
       file:
         path: /etc/nginx/sites-enabled/default
         state: absent
         force: yes
+      when: not ansible_check_mode
 
     - name: Install UFW firewall
       apt:
         name: ufw
         state: present
         update_cache: yes
+      when: not ansible_check_mode
+
+    - name: Skip UFW installation in check mode
+      debug:
+        msg: "UFW firewall would be installed in real run"
+      when: ansible_check_mode
 
     - name: Allow SSH through firewall
       ufw:
         rule: allow
         name: OpenSSH
+      when: not ansible_check_mode
 
     - name: Allow HTTP through firewall
       ufw:
         rule: allow
         port: 80
         proto: tcp
+      when: not ansible_check_mode
 
     - name: Allow HTTPS through firewall
       ufw:
         rule: allow
         port: 443
         proto: tcp
+      when: not ansible_check_mode
 
     - name: Enable UFW firewall
       ufw:
@@ -289,9 +528,16 @@
         policy: deny
         direction: incoming
         logging: on
+      when: not ansible_check_mode
+
+    - name: Skip firewall configuration in check mode
+      debug:
+        msg: "Firewall rules would be configured in real run"
+      when: ansible_check_mode
 
   handlers:
     - name: Reload Nginx
       service:
         name: nginx
-        state: reloaded 
+        state: reloaded
+      when: not ansible_check_mode 
