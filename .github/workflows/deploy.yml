@@ -57,6 +57,9 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+        echo "DEBUG: Adding public key to server's authorized_keys (if you have manual SSH access):"
+        echo "Run this command on your server:"
+        echo "echo '$(cat secrets/id_rsa.pub)' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 
     - name: Create secrets directory
       run: mkdir -p secrets
@@ -107,6 +110,17 @@ jobs:
         ssh-add -l
         echo "DEBUG: SSH public key fingerprint:"
         ssh-keygen -l -f secrets/id_rsa.pub
+        echo "DEBUG: SSH public key content (add this to server's authorized_keys):"
+        cat secrets/id_rsa.pub
+        echo "DEBUG: SSH public key fingerprint (for verification):"
+        ssh-keygen -l -f secrets/id_rsa.pub
+        echo "DEBUG: Instructions for server setup:"
+        echo "1. SSH to your server manually"
+        echo "2. Check if this exact line exists in ~/.ssh/authorized_keys:"
+        cat secrets/id_rsa.pub
+        echo "3. Ensure ~/.ssh has permissions 700 (drwx------)"
+        echo "4. Ensure ~/.ssh/authorized_keys has permissions 600 (-rw-------)"
+        echo "5. Check SSH server logs: sudo journalctl -u ssh -f"
         echo "DEBUG: Testing SSH connection with verbose output (using agent):"
         ssh -v -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo 'SSH connection successful'"
 
