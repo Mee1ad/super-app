@@ -75,8 +75,12 @@ jobs:
         SERVER_IP: ${{ secrets.SERVER_IP }}
         SERVER_USER: ${{ secrets.SERVER_USER }}
       run: |
+        echo "DEBUG: SERVER_IP = $SERVER_IP"
+        echo "DEBUG: SERVER_USER = $SERVER_USER"
         envsubst < ansible/inventory.yml > ansible/inventory.yml.tmpl
         mv ansible/inventory.yml.tmpl ansible/inventory.yml
+        echo "DEBUG: Templated inventory content:"
+        cat ansible/inventory.yml
 
     - name: Setup Ansible
       uses: dawidd6/action-ansible-playbook@v2
@@ -89,6 +93,11 @@ jobs:
       env:
         SERVER_IP: ${{ secrets.SERVER_IP }}
         SERVER_USER: ${{ secrets.SERVER_USER }}
+      run: |
+        echo "DEBUG: Current working directory: $(pwd)"
+        echo "DEBUG: Inventory file exists: $(test -f ansible/inventory.yml && echo 'YES' || echo 'NO')"
+        echo "DEBUG: Inventory file content before Ansible:"
+        cat ansible/inventory.yml
 
     - name: Cleanup secrets
       run: rm -rf secrets
