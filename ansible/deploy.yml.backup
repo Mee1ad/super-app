@@ -1,4 +1,4 @@
-﻿---
+---
 - name: Deploy Super App Backend
   hosts: all
   become: yes
@@ -10,7 +10,6 @@
     local_secrets_dir: "./secrets"
     app_dir: "/opt/super-app"
     docker_image: "ghcr.io/{{ github_repository | default('your-username/super-app-backend') }}:latest"
-    github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
 
   tasks:
     - name: Update system packages
@@ -98,13 +97,6 @@
         state: started
         enabled: yes
 
-    - name: Login to GitHub Container Registry
-      docker_login:
-        registry: ghcr.io
-        username: "{{ lookup('env', 'GITHUB_USERNAME', default='your-username') }}"
-        password: "{{ github_token }}"
-      when: github_token is defined
-
     - name: Create application directory
       file:
         path: "{{ app_dir }}"
@@ -144,49 +136,6 @@
         source: pull
         force_source: yes
       become_user: "{{ app_user }}"
-
-    - name: Install PostgreSQL
-      apt:
-        name: [postgresql, postgresql-contrib, libpq-dev]
-        state: present
-        update_cache: yes
-
-    - name: Ensure PostgreSQL is running
-      systemd:
-        name: postgresql
-        state: started
-        enabled: yes
-
-    - name: Set Postgres password from secret if available
-      become_user: postgres
-      shell: |
-        psql -c "ALTER USER postgres WITH PASSWORD '$(cat {{ secrets_dir }}/db_password 2>/dev/null || echo 'postgres')';"
-      args:
-        executable: /bin/bash
-      when: ansible_file_exists("{{ secrets_dir }}/db_password")
-
-    - name: Create application database
-      become_user: postgres
-      postgresql_db:
-        name: superapp
-        state: present
-
-    - name: Create application db user
-      become_user: postgres
-      postgresql_user:
-        name: superapp
-        password: "{{ lookup('file', secrets_dir + '/db_password') | default('superapp', true) }}"
-        priv: "ALL"
-        state: present
-
-    - name: Grant all privileges on database to user
-      become_user: postgres
-      postgresql_privs:
-        db: superapp
-        role: superapp
-        type: database
-        privs: ALL
-        state: present
 
     - name: Stop existing containers
       docker_compose:
@@ -259,6 +208,49 @@
         path: /etc/nginx/sites-enabled/default
         state: absent
         force: yes
+
+    - name: Install PostgreSQL
+      apt:
+        name: [postgresql, postgresql-contrib, libpq-dev]
+        state: present
+        update_cache: yes
+
+    - name: Ensure PostgreSQL is running
+      systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Set Postgres password from secret if available
+      become_user: postgres
+      shell: |
+        psql -c "ALTER USER postgres WITH PASSWORD '$(cat {{ secrets_dir }}/db_password 2>/dev/null || echo 'postgres')';"
+      args:
+        executable: /bin/bash
+      when: ansible_file_exists("{{ secrets_dir }}/db_password")
+
+    - name: Create application database
+      become_user: postgres
+      postgresql_db:
+        name: superapp
+        state: present
+
+    - name: Create application db user
+      become_user: postgres
+      postgresql_user:
+        name: superapp
+        password: "{{ lookup('file', secrets_dir + '/db_password') | default('superapp', true) }}"
+        priv: "ALL"
+        state: present
+
+    - name: Grant all privileges on database to user
+      become_user: postgres
+      postgresql_privs:
+        db: superapp
+        role: superapp
+        type: database
+        privs: ALL
+        state: present
 
     - name: Install UFW firewall
       apt:
