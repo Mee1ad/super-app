@@ -102,6 +102,7 @@ jobs:
         options: |
           --verbose
           --extra-vars "github_repository=${{ github.repository }}"
+          --inventory-file ansible/inventory.yml
       env:
         SERVER_IP: ${{ secrets.SERVER_IP }}
         SERVER_USER: ${{ secrets.SERVER_USER }}
