@@ -1,12 +1,10 @@
-all:
-  children:
-    production:
-      hosts:
-        production-server:
-          ansible_host: "{{ lookup('env', 'SERVER_IP') }}"
-          ansible_user: "{{ lookup('env', 'SERVER_USER', default='superapp') }}"
-          ansible_ssh_private_key_file: "./secrets/id_rsa"
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-      vars:
-        ansible_python_interpreter: /usr/bin/python3 
+production:
+  hosts:
+    production-server:
+      ansible_host: "{{ lookup('env', 'SERVER_IP') }}"
+      ansible_user: "{{ lookup('env', 'SERVER_USER', default='superapp') }}"
+      ansible_ssh_private_key_file: "{{ lookup('env', 'GITHUB_WORKSPACE') }}/secrets/id_rsa"
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  vars:
+    ansible_python_interpreter: /usr/bin/python3 
         
