@@ -31,7 +31,7 @@ Create the following files in the `./secrets/` directory:
 In your GitHub repository, go to Settings > Secrets and variables > Actions, and add the following secrets:
 
 - `SERVER_IP`: Your server's IP address
-- `SERVER_USER`: SSH user (usually `ubuntu`)
+- `SERVER_USER`: SSH user (usually `root`)
 - `SSH_PRIVATE_KEY`: Content of your SSH private key
 - `SSH_PUBLIC_KEY`: Content of your SSH public key
 - `API_KEY`: Your API key
@@ -62,7 +62,7 @@ If you need to deploy manually:
 ```bash
 # Set environment variables
 export SERVER_IP="your-server-ip"
-export SERVER_USER="ubuntu"
+export SERVER_USER="root"
 export SSH_KEY_PATH="./secrets/id_rsa"
 export GITHUB_REPOSITORY="your-username/super-app-backend"
 

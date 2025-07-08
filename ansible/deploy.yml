@@ -58,12 +58,12 @@
 
     - name: Copy SSH public key
       copy:
-        src: "{{ local_secrets_dir }}/id_rsa.pub"
+        src: "{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub"
         dest: "/home/{{ app_user }}/.ssh/authorized_keys"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0600'
-      when: ansible_file_exists("{{ local_secrets_dir }}/id_rsa.pub")
+      when: ansible_file_exists("{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub")
 
     - name: Add Docker GPG key
       apt_key:

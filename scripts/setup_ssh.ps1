@@ -50,7 +50,7 @@ try {
         Write-Host "1. Copy the public key to your server's ~/.ssh/authorized_keys" -ForegroundColor White
         Write-Host "2. Set environment variables for Ansible deployment:" -ForegroundColor White
         Write-Host "   - SERVER_IP: Your server IP address" -ForegroundColor White
-        Write-Host "   - SERVER_USER: SSH username (default: ubuntu)" -ForegroundColor White
+        Write-Host "   - SERVER_USER: SSH username (default: root)" -ForegroundColor White
         Write-Host "   - SSH_KEY_PATH: $KeyPath" -ForegroundColor White
         Write-Host "   - GITHUB_REPOSITORY: Your GitHub repository URL" -ForegroundColor White
         
