@@ -87,6 +87,7 @@ jobs:
         echo "DEBUG: Final inventory content:"
         cat ansible/inventory.yml
 
+    - name: Debug inventory before Ansible
       run: |
         echo "DEBUG: Current working directory: $(pwd)"
         echo "DEBUG: Inventory file exists: $(test -f ansible/inventory.yml && echo 'YES' || echo 'NO')"
