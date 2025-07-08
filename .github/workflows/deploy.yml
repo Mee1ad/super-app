@@ -97,8 +97,14 @@ jobs:
         echo "DEBUG: Inventory file exists: $(test -f ansible/inventory.yml && echo 'YES' || echo 'NO')"
         echo "DEBUG: Inventory file content before Ansible:"
         cat ansible/inventory.yml
-        echo "DEBUG: Testing SSH connection manually:"
-        ssh -i secrets/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo 'SSH connection successful'"
+        echo "DEBUG: SSH key file details:"
+        ls -la secrets/id_rsa
+        echo "DEBUG: SSH key content (first few lines):"
+        head -5 secrets/id_rsa
+        echo "DEBUG: SSH agent keys:"
+        ssh-add -l
+        echo "DEBUG: Testing SSH connection with verbose output (using agent):"
+        ssh -v -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo 'SSH connection successful'"
 
     - name: Setup Ansible
       uses: dawidd6/action-ansible-playbook@v2

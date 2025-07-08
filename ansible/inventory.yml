@@ -5,7 +5,6 @@ all:
         production-server:
           ansible_host: "${SERVER_IP}"
           ansible_user: "${SERVER_USER}"
-          ansible_ssh_private_key_file: "${GITHUB_WORKSPACE}/secrets/id_rsa"
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
       vars:
         ansible_python_interpreter: /usr/bin/python3
