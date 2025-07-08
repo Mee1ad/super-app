@@ -81,8 +81,6 @@ jobs:
       env:
         SERVER_IP: ${{ secrets.SERVER_IP }}
         SERVER_USER: ${{ secrets.SERVER_USER }}
-        SSH_KEY_PATH: ./secrets/id_rsa
-        GITHUB_REPOSITORY: ${{ github.repository }}
 
     - name: Cleanup secrets
       run: rm -rf secrets
