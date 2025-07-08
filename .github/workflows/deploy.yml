@@ -53,6 +53,14 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+    - name: Debug SSH Agent Setup
+      run: |
+        echo "DEBUG: SSH agent status after setup:"
+        ssh-add -l
+        echo "DEBUG: SSH agent environment variables:"
+        echo "SSH_AUTH_SOCK: $SSH_AUTH_SOCK"
+        echo "SSH_AGENT_PID: $SSH_AGENT_PID"
+
     - name: Add server to known hosts
       run: |
         mkdir -p ~/.ssh
@@ -108,10 +116,23 @@ jobs:
         head -5 secrets/id_rsa
         echo "DEBUG: SSH agent keys:"
         ssh-add -l
+        echo "DEBUG: Comparing SSH agent key with file key:"
+        echo "Agent key fingerprint:"
+        ssh-add -L | ssh-keygen -l -f /dev/stdin
+        echo "File key fingerprint:"
+        ssh-keygen -l -f secrets/id_rsa.pub
+        echo "Do they match?"
+        if [ "$(ssh-add -L | ssh-keygen -l -f /dev/stdin | cut -d' ' -f2)" = "$(ssh-keygen -l -f secrets/id_rsa.pub | cut -d' ' -f2)" ]; then
+          echo "YES - Keys match"
+        else
+          echo "NO - Keys don't match"
+        fi
         echo "DEBUG: SSH public key fingerprint:"
         ssh-keygen -l -f secrets/id_rsa.pub
         echo "DEBUG: SSH public key content (add this to server's authorized_keys):"
         cat secrets/id_rsa.pub
+        echo "DEBUG: SSH public key content (hex format for exact matching):"
+        cat secrets/id_rsa.pub | cut -d' ' -f2 | base64 -d | xxd -p
         echo "DEBUG: SSH public key fingerprint (for verification):"
         ssh-keygen -l -f secrets/id_rsa.pub
         echo "DEBUG: Instructions for server setup:"
