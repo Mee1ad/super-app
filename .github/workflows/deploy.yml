@@ -69,6 +69,8 @@ jobs:
         echo "${{ secrets.SSH_PUBLIC_KEY }}" > secrets/id_rsa.pub
         chmod 600 secrets/id_rsa
         chmod 644 secrets/id_rsa.pub
+        echo "DEBUG: SSH key format check:"
+        ssh-keygen -l -f secrets/id_rsa || echo "SSH key format is invalid"
 
     - name: Template inventory with env vars
       env:
@@ -103,6 +105,8 @@ jobs:
         head -5 secrets/id_rsa
         echo "DEBUG: SSH agent keys:"
         ssh-add -l
+        echo "DEBUG: SSH public key fingerprint:"
+        ssh-keygen -l -f secrets/id_rsa.pub
         echo "DEBUG: Testing SSH connection with verbose output (using agent):"
         ssh -v -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo 'SSH connection successful'"
 
