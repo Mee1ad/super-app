@@ -403,15 +403,15 @@
     - name: Stop existing containers
       shell: |
         cd {{ app_dir }}
-        docker-compose down
+        docker compose down
       become_user: "{{ app_user }}"
       ignore_errors: yes
       when: not ansible_check_mode
 
-    - name: Start application with docker-compose
+    - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        docker-compose up -d --pull always
+        docker compose up -d --pull always
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
 
