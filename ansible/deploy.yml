@@ -1,6 +1,6 @@
 ﻿---
 - name: Deploy Super App Backend
-  hosts: all
+  hosts: production
   become: yes
   vars:
     app_user: "superapp"
