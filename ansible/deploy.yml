@@ -551,7 +551,7 @@
     - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        docker compose up -d
+        docker compose up -d --build
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
 
