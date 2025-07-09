@@ -23,6 +23,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install ansible
         
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/super-app-backend
+        chmod 600 ~/.ssh/super-app-backend
+        ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+        
     - name: Create secrets directory
       run: mkdir -p secrets
       
@@ -31,12 +38,11 @@ jobs:
         echo "${{ secrets.DB_PASSWORD }}" > secrets/db_password
         echo "${{ secrets.API_KEY }}" > secrets/api_key
         
-    - name: Deploy with Ansible (using superapp user)
+    - name: Deploy with Ansible
       env:
         ANSIBLE_HOST_KEY_CHECKING: false
+        SERVER_IP: ${{ secrets.SERVER_IP }}
+        ANSIBLE_USER: ${{ secrets.ANSIBLE_USER }}
+        SSH_KEY_FILE: ~/.ssh/super-app-backend
       run: |
-        # Use superapp user instead of root
-        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml \
-          --user superapp \
-          --private-key ~/.ssh/super-app-backend \
-          --extra-vars "ansible_become=yes ansible_become_user=root ansible_become_method=sudo" 
+        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml 
