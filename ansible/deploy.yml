@@ -58,15 +58,57 @@
         group: "{{ app_group }}"
         mode: '0700'
 
-    # Copy SSH public key from local .ssh directory
-    - name: Copy SSH public key to app user
+    # Set up SSH public key for app user
+    # Method 1: Use SSH_PUBLIC_KEY environment variable (GitHub Actions)
+    - name: Create SSH public key file from environment variable
+      copy:
+        content: "{{ lookup('env', 'SSH_PUBLIC_KEY', default='') }}"
+        dest: "/tmp/super-app-backend.pub"
+        mode: '0644'
+      when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') != ''
+
+    - name: Copy SSH public key to app user (from env var)
+      copy:
+        src: "/tmp/super-app-backend.pub"
+        dest: "/home/{{ app_user }}/.ssh/authorized_keys"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0600'
+      when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') != ''
+
+    # Method 2: Copy from local file (local development)
+    - name: Check if local SSH public key exists
+      stat:
+        path: "/mnt/c/Users/Soheil/.ssh/super-app-backend.pub"
+      register: local_ssh_pub_key_stat
+      delegate_to: localhost
+      when: lookup('env', 'SSH_PUBLIC_KEY', default='') == ''
+
+    - name: Copy local SSH public key to app user
       copy:
         src: "/mnt/c/Users/Soheil/.ssh/super-app-backend.pub"
         dest: "/home/{{ app_user }}/.ssh/authorized_keys"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0600'
-      when: ansible_check_mode == false
+      when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') == '' and local_ssh_pub_key_stat.stat.exists
+
+    # Method 3: Generate from private key (fallback)
+    - name: Generate public key from private key (fallback)
+      shell: ssh-keygen -y -f ~/.ssh/super-app-backend > ~/.ssh/super-app-backend.pub
+      args:
+        creates: ~/.ssh/super-app-backend.pub
+      when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') == '' and not local_ssh_pub_key_stat.stat.exists
+      delegate_to: localhost
+
+    - name: Copy generated SSH public key to app user (fallback)
+      copy:
+        src: "~/.ssh/super-app-backend.pub"
+        dest: "/home/{{ app_user }}/.ssh/authorized_keys"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0600'
+      when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') == '' and not local_ssh_pub_key_stat.stat.exists
 
     - name: Debug Ubuntu version
       debug:
