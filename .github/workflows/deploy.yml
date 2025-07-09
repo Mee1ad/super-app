@@ -38,11 +38,27 @@ jobs:
         echo "${{ secrets.DB_PASSWORD }}" > secrets/db_password
         echo "${{ secrets.API_KEY }}" > secrets/api_key
         
+    - name: Debug SSH setup
+      run: |
+        echo "SSH key exists: $(ls -la ~/.ssh/super-app-backend)"
+        echo "SSH key permissions: $(stat -c '%a' ~/.ssh/super-app-backend)"
+        echo "SSH key first line: $(head -1 ~/.ssh/super-app-backend)"
+        echo "SSH key last line: $(tail -1 ~/.ssh/super-app-backend)"
+        echo "Known hosts: $(cat ~/.ssh/known_hosts)"
+        
+    - name: Test SSH connection
+      run: |
+        ssh -i ~/.ssh/super-app-backend -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo 'SSH connection successful'"
+        
     - name: Deploy with Ansible
       env:
         ANSIBLE_HOST_KEY_CHECKING: false
         SERVER_IP: ${{ secrets.SERVER_IP }}
-        ANSIBLE_USER: ${{ secrets.ANSIBLE_USER }}
+        ANSIBLE_USER: ${{ secrets.SERVER_USER }}
         SSH_KEY_FILE: ~/.ssh/super-app-backend
       run: |
-        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml 
+        echo "Environment variables:"
+        echo "SERVER_IP: $SERVER_IP"
+        echo "ANSIBLE_USER: $ANSIBLE_USER"
+        echo "SSH_KEY_FILE: $SSH_KEY_FILE"
+        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -vvv 
