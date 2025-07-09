@@ -62,4 +62,4 @@ jobs:
         echo "SERVER_IP: $SERVER_IP"
         echo "ANSIBLE_USER: $ANSIBLE_USER"
         echo "SSH_KEY_FILE: $SSH_KEY_FILE"
-        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -vvv 
+        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml 
