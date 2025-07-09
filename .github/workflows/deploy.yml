@@ -1,163 +1,42 @@
-name: Build and Deploy
+name: Deploy to Production
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.CR_PAT }}
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Setup SSH
-      uses: webfactory/ssh-agent@v0.8.0
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Debug SSH Agent Setup
+        python-version: '3.11'
+        
+    - name: Install Ansible
       run: |
-        echo "DEBUG: SSH agent status after setup:"
-        ssh-add -l
-        echo "DEBUG: SSH agent environment variables:"
-        echo "SSH_AUTH_SOCK: $SSH_AUTH_SOCK"
-        echo "SSH_AGENT_PID: $SSH_AGENT_PID"
-
-    - name: Add server to known hosts
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
-        echo "DEBUG: Adding public key to server's authorized_keys (if you have manual SSH access):"
-        echo "Run this command on your server:"
-        echo "echo '$(cat secrets/id_rsa.pub)' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
-
+        python -m pip install --upgrade pip
+        pip install ansible
+        
     - name: Create secrets directory
       run: mkdir -p secrets
-
-    - name: Create secret files
+      
+    - name: Create secrets files
       run: |
-        echo "${{ secrets.API_KEY }}" > secrets/api_key
         echo "${{ secrets.DB_PASSWORD }}" > secrets/db_password
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > secrets/id_rsa
-        echo "${{ secrets.SSH_PUBLIC_KEY }}" > secrets/id_rsa.pub
-        chmod 600 secrets/id_rsa
-        chmod 644 secrets/id_rsa.pub
-        echo "DEBUG: SSH key format check:"
-        ssh-keygen -l -f secrets/id_rsa || echo "SSH key format is invalid"
-
-    - name: Template inventory with env vars
+        echo "${{ secrets.API_KEY }}" > secrets/api_key
+        
+    - name: Deploy with Ansible (using superapp user)
       env:
-        SERVER_IP: ${{ secrets.SERVER_IP }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
-        GITHUB_WORKSPACE: ${{ github.workspace }}
+        ANSIBLE_HOST_KEY_CHECKING: false
       run: |
-        echo "DEBUG: SERVER_IP = $SERVER_IP"
-        echo "DEBUG: SERVER_USER = $SERVER_USER"
-        echo "DEBUG: GITHUB_WORKSPACE = $GITHUB_WORKSPACE"
-        echo "DEBUG: Original inventory content:"
-        cat ansible/inventory.yml
-        echo "DEBUG: Running envsubst..."
-        envsubst < ansible/inventory.yml > ansible/inventory.yml.tmpl
-        echo "DEBUG: Templated inventory content:"
-        cat ansible/inventory.yml.tmpl
-        mv ansible/inventory.yml.tmpl ansible/inventory.yml
-        echo "DEBUG: Final inventory content:"
-        cat ansible/inventory.yml
-        echo "DEBUG: SSH key file exists: $(test -f secrets/id_rsa && echo 'YES' || echo 'NO')"
-        echo "DEBUG: SSH key permissions: $(ls -la secrets/id_rsa)"
-
-    - name: Debug inventory before Ansible
-      run: |
-        echo "DEBUG: Current working directory: $(pwd)"
-        echo "DEBUG: Inventory file exists: $(test -f ansible/inventory.yml && echo 'YES' || echo 'NO')"
-        echo "DEBUG: Inventory file content before Ansible:"
-        cat ansible/inventory.yml
-        echo "DEBUG: SSH key file details:"
-        ls -la secrets/id_rsa
-        echo "DEBUG: SSH key content (first few lines):"
-        head -5 secrets/id_rsa
-        echo "DEBUG: SSH agent keys:"
-        ssh-add -l
-        echo "DEBUG: Comparing SSH agent key with file key:"
-        echo "Agent key fingerprint:"
-        ssh-add -L | ssh-keygen -l -f /dev/stdin
-        echo "File key fingerprint:"
-        ssh-keygen -l -f secrets/id_rsa.pub
-        echo "Do they match?"
-        if [ "$(ssh-add -L | ssh-keygen -l -f /dev/stdin | cut -d' ' -f2)" = "$(ssh-keygen -l -f secrets/id_rsa.pub | cut -d' ' -f2)" ]; then
-          echo "YES - Keys match"
-        else
-          echo "NO - Keys don't match"
-        fi
-        echo "DEBUG: SSH public key fingerprint:"
-        ssh-keygen -l -f secrets/id_rsa.pub
-        echo "DEBUG: SSH public key content (add this to server's authorized_keys):"
-        cat secrets/id_rsa.pub
-        echo "DEBUG: SSH public key content (hex format for exact matching):"
-        cat secrets/id_rsa.pub | cut -d' ' -f2 | base64 -d | xxd -p
-        echo "DEBUG: SSH public key fingerprint (for verification):"
-        ssh-keygen -l -f secrets/id_rsa.pub
-        echo "DEBUG: Instructions for server setup:"
-        echo "1. SSH to your server manually"
-        echo "2. Check if this exact line exists in ~/.ssh/authorized_keys:"
-        cat secrets/id_rsa.pub
-        echo "3. Ensure ~/.ssh has permissions 700 (drwx------)"
-        echo "4. Ensure ~/.ssh/authorized_keys has permissions 600 (-rw-------)"
-        echo "5. Check SSH server logs: sudo journalctl -u ssh -f"
-        echo "DEBUG: Testing SSH connection with verbose output (using agent):"
-        ssh -v -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "echo 'SSH connection successful'"
-
-    - name: Setup Ansible
-      uses: dawidd6/action-ansible-playbook@v2
-      with:
-        playbook: ansible/deploy.yml
-        inventory: ansible/inventory.yml
-        options: |
-          --verbose
-          --extra-vars "github_repository=${{ github.repository }}"
-          --inventory-file ansible/inventory.yml
-      env:
-        SERVER_IP: ${{ secrets.SERVER_IP }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
-
-    - name: Cleanup secrets
-      run: rm -rf secrets
-      if: always() 
+        # Use superapp user instead of root
+        ansible-playbook -i ansible/inventory.yml ansible/deploy.yml \
+          --user superapp \
+          --private-key ~/.ssh/super-app-backend \
+          --extra-vars "ansible_become=yes ansible_become_user=root ansible_become_method=sudo" 

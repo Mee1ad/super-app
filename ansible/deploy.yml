@@ -7,7 +7,7 @@
     app_group: "superapp"
     docker_compose_version: "2.20.0"
     secrets_dir: "/run/secrets"
-    local_secrets_dir: "./secrets"
+    local_secrets_dir: "../secrets"
     app_dir: "/opt/super-app"
     docker_image: "ghcr.io/{{ github_repository | default('your-username/super-app-backend') }}:latest"
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
@@ -58,20 +58,15 @@
         group: "{{ app_group }}"
         mode: '0700'
 
-    # Check if SSH public key exists
-    - name: Check if SSH public key exists
-      stat:
-        path: "{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub"
-      register: ssh_pubkey_stat
-
-    - name: Copy SSH public key
+    # Copy SSH public key from local .ssh directory
+    - name: Copy SSH public key to app user
       copy:
-        src: "{{ lookup('env', 'SSH_KEY_PATH', default='~/.ssh/super-app-backend') }}.pub"
+        src: "/mnt/c/Users/Soheil/.ssh/super-app-backend.pub"
         dest: "/home/{{ app_user }}/.ssh/authorized_keys"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0600'
-      when: ssh_pubkey_stat.stat.exists
+      when: ansible_check_mode == false
 
     - name: Debug Ubuntu version
       debug:
@@ -223,6 +218,15 @@
         groups: docker
         append: yes
 
+    - name: Configure passwordless sudo for app user
+      lineinfile:
+        path: /etc/sudoers.d/{{ app_user }}
+        line: "{{ app_user }} ALL=(ALL) NOPASSWD:ALL"
+        create: yes
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      when: not ansible_check_mode
+
     - name: Login to GitHub Container Registry
       docker_login:
         registry: ghcr.io
@@ -241,6 +245,13 @@
       debug:
         msg: "Docker operations (login, pull, compose) would be performed in real run"
       when: ansible_check_mode
+
+    - name: Copy secrets directory to server
+      synchronize:
+        src: "{{ local_secrets_dir }}/"
+        dest: "/tmp/secrets/"
+        recursive: yes
+      when: ansible_check_mode == false
 
     - name: Create application directory
       file:
@@ -272,6 +283,33 @@
         mode: '0600'
       when: local_secrets_dir_stat.stat.exists
 
+    - name: Ensure db_password is present in /run/secrets
+      copy:
+        src: "{{ local_secrets_dir }}/db_password"
+        dest: "{{ secrets_dir }}/db_password"
+        owner: root
+        group: root
+        mode: '0600'
+      ignore_errors: no
+
+    - name: Debug db_password file presence
+      stat:
+        path: "{{ secrets_dir }}/db_password"
+      register: db_password_file_debug
+
+    - name: Show db_password file stat
+      debug:
+        var: db_password_file_debug
+
+    - name: Ensure api_key is present in /run/secrets
+      copy:
+        src: "{{ local_secrets_dir }}/api_key"
+        dest: "{{ secrets_dir }}/api_key"
+        owner: root
+        group: root
+        mode: '0600'
+      ignore_errors: no
+
     - name: Copy docker-compose.yml
       copy:
         src: "../docker-compose.yml"
@@ -281,6 +319,37 @@
         mode: '0644'
       when: not ansible_check_mode
 
+    - name: Copy Dockerfile
+      copy:
+        src: "../Dockerfile"
+        dest: "{{ app_dir }}/Dockerfile"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      when: not ansible_check_mode
+
+    - name: Copy requirements.txt
+      copy:
+        src: "../requirements.txt"
+        dest: "{{ app_dir }}/requirements.txt"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      when: not ansible_check_mode
+
+    - name: Copy application files
+      synchronize:
+        src: "../"
+        dest: "{{ app_dir }}/"
+        rsync_opts:
+          - "--exclude=venv/"
+          - "--exclude=.git/"
+          - "--exclude=__pycache__/"
+          - "--exclude=*.pyc"
+          - "--exclude=ansible/"
+          - "--exclude=secrets/"
+      when: not ansible_check_mode
+
     - name: Pull latest Docker image
       docker_image:
         name: "{{ docker_image }}"
@@ -288,6 +357,13 @@
         force_source: yes
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
+      ignore_errors: yes
+      register: docker_image_pull_result
+
+    - name: Debug Docker image pull result (may be missing on first run)
+      debug:
+        msg: "Docker image pull result: {{ docker_image_pull_result }}"
+      when: docker_image_pull_result is defined
 
     - name: Install PostgreSQL
       apt:
@@ -351,6 +427,30 @@
         enabled: yes
       when: not ansible_check_mode
 
+    - name: Configure PostgreSQL authentication for postgres user
+      become: true
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        regexp: '^local\s+all\s+postgres\s+peer'
+        line: 'local all postgres trust'
+        backup: yes
+      notify: Reload PostgreSQL
+      when: not ansible_check_mode
+
+    - name: Reload PostgreSQL configuration
+      become: true
+      systemd:
+        name: postgresql
+        state: reloaded
+      when: not ansible_check_mode
+
+    - name: Install Python PostgreSQL adapter
+      apt:
+        name: python3-psycopg2
+        state: present
+        update_cache: yes
+      when: not ansible_check_mode
+
     - name: Skip PostgreSQL installation in check mode
       debug:
         msg: "PostgreSQL installation skipped in check mode - packages would be installed in real run"
@@ -361,12 +461,18 @@
         path: "{{ secrets_dir }}/db_password"
       register: db_password_file
 
+    - name: Get db password content
+      slurp:
+        src: "{{ secrets_dir }}/db_password"
+      register: db_password_content
+      when: db_password_file.stat.exists and not ansible_check_mode
+
     - name: Set Postgres password from secret if available
       become_user: postgres
-      shell: |
-        psql -c "ALTER USER postgres WITH PASSWORD '$(cat {{ secrets_dir }}/db_password 2>/dev/null || echo 'postgres')';"
-      args:
-        executable: /bin/bash
+      postgresql_user:
+        name: postgres
+        password: "{{ db_password_content.content | default('postgres', true) }}"
+        state: present
       when: db_password_file.stat.exists and not ansible_check_mode
 
     - name: Create application database
@@ -380,19 +486,18 @@
       become_user: postgres
       postgresql_user:
         name: superapp
-        password: "{{ lookup('file', secrets_dir + '/db_password') | default('superapp', true) }}"
-        priv: "ALL"
+        password: "superapp123"
         state: present
       when: not ansible_check_mode
 
     - name: Grant all privileges on database to user
       become_user: postgres
       postgresql_privs:
-        db: superapp
         role: superapp
         type: database
         privs: ALL
         state: present
+        login_db: postgres
       when: not ansible_check_mode
 
     - name: Skip database operations in check mode
@@ -411,7 +516,7 @@
     - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        docker compose up -d --pull always
+        docker compose up -d
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
 
@@ -422,8 +527,8 @@
         status_code: 200
       register: result
       until: result.status == 200
-      retries: 30
-      delay: 10
+      retries: 1
+      delay: 5
       ignore_errors: yes
       when: not ansible_check_mode
 
@@ -540,9 +645,32 @@
         msg: "Firewall rules would be configured in real run"
       when: ansible_check_mode
 
+    - name: Test SSH access to superapp user
+      shell: |
+        timeout 10 ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 superapp@localhost "echo 'SSH access to superapp user is working!'" || echo "SSH test timed out or failed"
+      register: ssh_test_result
+      ignore_errors: yes
+      when: not ansible_check_mode
+
+    - name: Show SSH test result
+      debug:
+        msg: "SSH test result: {{ ssh_test_result.stdout }}"
+      when: not ansible_check_mode
+
+    - name: Skip SSH test in check mode
+      debug:
+        msg: "SSH access test would be performed in real run"
+      when: ansible_check_mode
+
   handlers:
     - name: Reload Nginx
       service:
         name: nginx
+        state: reloaded
+      when: not ansible_check_mode
+
+    - name: Reload PostgreSQL
+      systemd:
+        name: postgresql
         state: reloaded
       when: not ansible_check_mode 

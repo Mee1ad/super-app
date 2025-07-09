@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# bash run-ansible-check.sh
+# wsl bash run-ansible-check.sh
 
 # Check if running in Linux/WSL
 if [[ "$(uname -s)" != "Linux" ]]; then

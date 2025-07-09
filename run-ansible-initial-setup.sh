@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# wsl bash run-ansible-deploy.sh
+# bash run-ansible-initial-setup.sh
 
 # Check if running in Linux/WSL
 if [[ "$(uname -s)" != "Linux" ]]; then
@@ -18,4 +18,4 @@ else
 fi
 
 source ~/ansible-venv/bin/activate
-ansible-playbook -i ansible/inventory.yml ansible/deploy.yml 
+ansible-playbook -i ansible/inventory.yml --limit initial_setup ansible/deploy.yml 

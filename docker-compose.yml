@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY:-your-username/super-app-backend}:latest
+    build: .
     container_name: super-app-api
     restart: unless-stopped
     ports:

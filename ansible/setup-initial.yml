@@ -1,0 +1,137 @@
+---
+- name: Initial Server Setup
+  hosts: production
+  become: yes
+  vars:
+    app_user: "superapp"
+    app_group: "superapp"
+    docker_compose_version: "2.20.0"
+    app_dir: "/opt/super-app"
+    docker_image: "ghcr.io/{{ github_repository | default('your-username/super-app-backend') }}:latest"
+
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - wget
+          - gnupg
+          - lsb-release
+          - apt-transport-https
+          - ca-certificates
+          - software-properties-common
+        state: present
+
+    - name: Create application group
+      group:
+        name: "{{ app_group }}"
+        state: present
+
+    - name: Create application user
+      user:
+        name: "{{ app_user }}"
+        group: "{{ app_group }}"
+        shell: /bin/bash
+        create_home: yes
+        system: no
+
+    - name: Add user to sudo group
+      user:
+        name: "{{ app_user }}"
+        groups: sudo
+        append: yes
+
+    - name: Create .ssh directory for app user
+      file:
+        path: "/home/{{ app_user }}/.ssh"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0700'
+
+    - name: Copy SSH public key to app user
+      copy:
+        src: "~/.ssh/id_rsa.pub"
+        dest: "/home/{{ app_user }}/.ssh/authorized_keys"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0600'
+
+    - name: Install Docker dependencies
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: yes
+
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Docker GPG key
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+      check_mode: no
+
+    - name: Set permissions on Docker GPG key
+      file:
+        path: /etc/apt/keyrings/docker.gpg
+        mode: '0644'
+
+    - name: Add Docker repository
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+      check_mode: no
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+
+    - name: Install Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ app_user }}"
+        groups: docker
+        append: yes
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+
+    - name: Test SSH connection as new user
+      debug:
+        msg: "Server setup complete. You can now SSH as {{ app_user }} using your SSH key." 
