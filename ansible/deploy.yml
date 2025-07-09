@@ -60,16 +60,9 @@
 
     # Set up SSH public key for app user
     # Method 1: Use SSH_PUBLIC_KEY environment variable (GitHub Actions)
-    - name: Create SSH public key file from environment variable
-      copy:
-        content: "{{ lookup('env', 'SSH_PUBLIC_KEY', default='') }}"
-        dest: "/tmp/super-app-backend.pub"
-        mode: '0644'
-      when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') != ''
-
     - name: Copy SSH public key to app user (from env var)
       copy:
-        src: "/tmp/super-app-backend.pub"
+        content: "{{ lookup('env', 'SSH_PUBLIC_KEY', default='') }}"
         dest: "/home/{{ app_user }}/.ssh/authorized_keys"
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
