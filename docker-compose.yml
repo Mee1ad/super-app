@@ -1,6 +1,6 @@
 services:
   api:
-    build: .
+    image: super-app-backend
     container_name: super-app-api
     restart: unless-stopped
     ports:

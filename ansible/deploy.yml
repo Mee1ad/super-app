@@ -9,7 +9,7 @@
     secrets_dir: "/run/secrets"
     local_secrets_dir: "../secrets"
     app_dir: "/opt/super-app"
-    docker_image: "ghcr.io/{{ github_repository | default('your-username/super-app-backend') }}:latest"
+    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='your-username/super-app-backend') }}"
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
 
   tasks:
@@ -372,33 +372,37 @@
         mode: '0644'
       when: not ansible_check_mode
 
-    - name: Copy application files
-      synchronize:
-        src: "../"
-        dest: "{{ app_dir }}/"
-        rsync_opts:
-          - "--exclude=venv/"
-          - "--exclude=.git/"
-          - "--exclude=__pycache__/"
-          - "--exclude=*.pyc"
-          - "--exclude=ansible/"
-          - "--exclude=secrets/"
+    - name: Clone application repository
+      git:
+        repo: "https://github.com/{{ github_repository | default('your-username/super-app-backend') }}.git"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
       when: not ansible_check_mode
 
-    - name: Pull latest Docker image
-      docker_image:
-        name: "{{ docker_image }}"
-        source: pull
-        force_source: yes
+    - name: Debug cloned files
+      shell: ls -la {{ app_dir }}
+      register: cloned_files_debug
+      changed_when: falsewc
+      when: not ansible_check_mode
+
+    - name: Show cloned files
+      debug:
+        var: cloned_files_debug.stdout_lines
+      when: cloned_files_debug is defined and not ansible_check_mode
+
+    - name: Build Docker image locally
+      shell: |
+        cd {{ app_dir }}
+        docker build -t super-app-backend .
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
-      ignore_errors: yes
-      register: docker_image_pull_result
+      register: docker_build_result
 
-    - name: Debug Docker image pull result (may be missing on first run)
+    - name: Debug Docker build result
       debug:
-        msg: "Docker image pull result: {{ docker_image_pull_result }}"
-      when: docker_image_pull_result is defined
+        msg: "Docker build result: {{ docker_build_result }}"
+      when: docker_build_result is defined and not ansible_check_mode
 
     - name: Install PostgreSQL
       apt:
@@ -551,7 +555,7 @@
     - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        docker compose up -d --build
+        docker compose up -d
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
 

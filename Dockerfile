@@ -30,9 +30,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY . .
 
-# Debug: List files to ensure main.py is copied
-RUN ls -la /app && echo "Checking if main.py exists:" && test -f /app/main.py && echo "main.py found!"
-
 # Change ownership to appuser
 RUN chown -R appuser:appuser /app
 
