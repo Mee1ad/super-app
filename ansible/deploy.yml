@@ -583,7 +583,17 @@
         enabled: yes
       when: not ansible_check_mode
 
-    - name: Configure PostgreSQL authentication for postgres user
+    - name: Configure PostgreSQL for local access only (secure)
+      become: true
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = 'localhost'"
+        backup: yes
+      notify: Reload PostgreSQL
+      when: not ansible_check_mode
+
+    - name: Configure PostgreSQL authentication for local access
       become: true
       lineinfile:
         path: /etc/postgresql/16/main/pg_hba.conf
@@ -593,11 +603,28 @@
       notify: Reload PostgreSQL
       when: not ansible_check_mode
 
+    - name: Ensure PostgreSQL only listens on localhost (security)
+      become: true
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        regexp: '^host\s+all\s+all\s+0\.0\.0\.0/0'
+        state: absent
+        backup: yes
+      notify: Reload PostgreSQL
+      when: not ansible_check_mode
+
     - name: Reload PostgreSQL configuration
       become: true
       systemd:
         name: postgresql
         state: reloaded
+      when: not ansible_check_mode
+
+    - name: Ensure PostgreSQL port is NOT exposed in firewall (security)
+      ufw:
+        rule: deny
+        port: '5432'
+        proto: tcp
       when: not ansible_check_mode
 
     - name: Install Python PostgreSQL adapter
@@ -612,39 +639,59 @@
         msg: "PostgreSQL installation skipped in check mode - packages would be installed in real run"
       when: ansible_check_mode
 
-    - name: Check if db_password file exists
+    - name: Check if db_password_postgres file exists
       stat:
-        path: "{{ secrets_dir }}/db_password"
-      register: db_password_file
+        path: "{{ secrets_dir }}/db_password_postgres"
+      register: db_password_postgres_file
 
-    - name: Get db password content
+    - name: Get db_password_postgres content
       slurp:
-        src: "{{ secrets_dir }}/db_password"
-      register: db_password_content
-      when: db_password_file.stat.exists and not ansible_check_mode
+        src: "{{ secrets_dir }}/db_password_postgres"
+      register: db_password_postgres_content
+      when: db_password_postgres_file.stat.exists and not ansible_check_mode
+
+    - name: Check if db_password_superapp file exists
+      stat:
+        path: "{{ secrets_dir }}/db_password_superapp"
+      register: db_password_superapp_file
+
+    - name: Get db_password_superapp content
+      slurp:
+        src: "{{ secrets_dir }}/db_password_superapp"
+      register: db_password_superapp_content
+      when: db_password_superapp_file.stat.exists and not ansible_check_mode
 
     - name: Set Postgres password from secret if available
       become_user: postgres
       postgresql_user:
         name: postgres
-        password: "{{ db_password_content.content | default('postgres', true) }}"
+        password: "{{ db_password_postgres_content.content | b64decode | default('postgres', true) }}"
         state: present
-      when: db_password_file.stat.exists and not ansible_check_mode
+      when: db_password_postgres_file.stat.exists and not ansible_check_mode
 
-    - name: Create application database
+    - name: Set Postgres password to default if secret missing
       become_user: postgres
-      postgresql_db:
-        name: superapp
+      postgresql_user:
+        name: postgres
+        password: "postgres"
         state: present
-      when: not ansible_check_mode
+      when: not db_password_postgres_file.stat.exists and not ansible_check_mode
 
-    - name: Create application db user
+    - name: Create application db user from secret
+      become_user: postgres
+      postgresql_user:
+        name: superapp
+        password: "{{ db_password_superapp_content.content | b64decode | default('superapp123', true) }}"
+        state: present
+      when: db_password_superapp_file.stat.exists and not ansible_check_mode
+
+    - name: Create application db user with default password if secret missing
       become_user: postgres
       postgresql_user:
         name: superapp
         password: "superapp123"
         state: present
-      when: not ansible_check_mode
+      when: not db_password_superapp_file.stat.exists and not ansible_check_mode
 
     - name: Grant all privileges on database to user
       become_user: postgres
@@ -654,7 +701,7 @@
         privs: ALL
         state: present
         login_db: postgres
-      when: not ansible_check_mode
+      when: (db_password_superapp_file.stat.exists or not db_password_superapp_file.stat.exists) and not ansible_check_mode
 
     - name: Skip database operations in check mode
       debug:
