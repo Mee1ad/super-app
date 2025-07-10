@@ -372,13 +372,25 @@
         mode: '0644'
       when: not ansible_check_mode
 
-    - name: Clone application repository
+    - name: Check if application directory exists
+      stat:
+        path: "{{ app_dir }}"
+      register: app_dir_stat
+
+    - name: Clone application repository (if not exists)
+      git:
+        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app') }}.git"
+        dest: "{{ app_dir }}"
+        version: main
+      when: not ansible_check_mode and not app_dir_stat.stat.exists
+
+    - name: Pull latest changes (if directory exists)
       git:
         repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app') }}.git"
         dest: "{{ app_dir }}"
         version: main
         force: yes
-      when: not ansible_check_mode
+      when: not ansible_check_mode and app_dir_stat.stat.exists
 
     - name: Debug cloned files
       shell: ls -la {{ app_dir }}
