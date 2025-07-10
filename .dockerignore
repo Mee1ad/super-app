@@ -45,7 +45,7 @@ ENV/
 ehthumbs.db
 Thumbs.db
 
-# Project specific
+# Project specific - be more selective
 tests/
 docs/
 scripts/
