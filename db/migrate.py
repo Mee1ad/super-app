@@ -197,7 +197,7 @@ async def verify_database():
         if not settings.is_testing:
             # Only test on real database, not in-memory SQLite
             from apps.todo.models import List
-            test_list = await List.objects.create(**test_list_data)
+            test_list = await List.create(**test_list_data)
             logger.info(f"✅ Test insert successful: {test_list.id}")
             await test_list.delete()
             logger.info("✅ Test cleanup successful")
