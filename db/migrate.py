@@ -196,11 +196,26 @@ async def verify_database():
         # This is a test - we'll clean up after
         if not settings.is_testing:
             # Only test on real database, not in-memory SQLite
-            from apps.todo.models import List
-            test_list = await List.objects.create(**test_list_data)
-            logger.info(f"✅ Test insert successful: {test_list.id}")
-            await test_list.delete()
-            logger.info("✅ Test cleanup successful")
+            # Insert test row
+            await database.execute(
+                """
+                INSERT INTO lists (type, title, variant) VALUES (:type, :title, :variant)
+                """,
+                test_list_data
+            )
+            # Fetch the inserted row (assuming title is unique for this test)
+            result = await database.fetch_one(
+                "SELECT id FROM lists WHERE title = :title ORDER BY created_at DESC LIMIT 1",
+                {"title": test_list_data["title"]}
+            )
+            if result:
+                test_list_id = result[0]
+                logger.info(f"✅ Test insert successful: {test_list_id}")
+                # Delete the test row
+                await database.execute("DELETE FROM lists WHERE id = :id", {"id": test_list_id})
+                logger.info("✅ Test cleanup successful")
+            else:
+                logger.error("❌ Test insert failed: Could not find inserted row.")
         
         logger.info("✅ Database verification completed successfully")
         return True
