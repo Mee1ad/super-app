@@ -93,8 +93,7 @@ jobs:
     - name: Verify database state after tests
       run: |
         echo "🔍 Verifying database state after all tests..."
-        python -c "
-import asyncio
+        cat <<EOF > verify_db.py
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath('.')))
@@ -105,31 +104,29 @@ async def verify_database():
     try:
         await database.connect()
         # Check if tables exist
-        result = await database.fetch_all(\"\"\"
+        result = await database.fetch_all('''
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_name IN ('lists', 'tasks', 'shopping_items')
             ORDER BY table_name;
-        \"\"\")
+        ''')
         tables = [row[0] for row in result]
         print(f'✅ Found tables: {tables}')
-        
         # Check if migrations table exists
-        result = await database.fetch_all(\"\"\"
-            SELECT name FROM migrations ORDER BY applied_at;
-        \"\"\")
+        result = await database.fetch_all('SELECT name FROM migrations ORDER BY applied_at;')
         migrations = [row[0] for row in result]
         print(f'✅ Applied migrations: {migrations}')
-        
         await database.disconnect()
         print('✅ Database verification successful!')
     except Exception as e:
         print(f'❌ Database verification failed: {e}')
         sys.exit(1)
 
+import asyncio
 asyncio.run(verify_database())
-        "
+EOF
+          python verify_db.py
 
   migrate-production:
     name: Run Production Migrations
