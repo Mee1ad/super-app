@@ -407,8 +407,15 @@
         owner: root
         group: root
         mode: '0600'
-      ignore_errors: no
+      when: db_password_postgres_file.stat.exists
+      ignore_errors: yes
       tags: [secrets, database]
+
+    - name: Debug if db_password_postgres is missing
+      debug:
+        msg: "db_password_postgres not found, skipping copy."
+      when: not db_password_postgres_file.stat.exists
+      tags: [secrets, database, debug]
 
     - name: Ensure db_password_superapp is present in /run/secrets
       copy:
