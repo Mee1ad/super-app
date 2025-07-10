@@ -800,6 +800,14 @@
       when: not ansible_check_mode
       tags: [docker, compose, start]
 
+    - name: Run database migrations in backend container
+      shell: |
+        cd {{ app_dir }}
+        docker compose exec -T backend python db/migrate.py
+      become_user: "{{ app_user }}"
+      when: not ansible_check_mode
+      tags: [app, migrate, db]
+
     - name: Wait for application to be ready
       uri:
         url: http://localhost:8000/ping

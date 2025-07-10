@@ -23,6 +23,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: build
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U testuser"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,40 +48,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Set test DB environment variables
+        run: |
+          echo "DB_HOST=localhost" >> $GITHUB_ENV
+          echo "DB_PORT=5432" >> $GITHUB_ENV
+          echo "DB_NAME=testdb" >> $GITHUB_ENV
+          echo "DB_USER=testuser" >> $GITHUB_ENV
+          echo "DB_PASSWORD=testpass" >> $GITHUB_ENV
+          echo "SECRET_KEY=test" >> $GITHUB_ENV
+          echo "DEBUG=false" >> $GITHUB_ENV
+      - name: Run database migrations (test only)
+        run: |
+          python db/migrate.py
       - name: Run tests
         run: |
           echo "No test command defined. Add your test runner here."
 
-  migrate:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Setup environment variables
-        run: |
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> $GITHUB_ENV
-          echo "DB_PORT=${{ secrets.DB_PORT }}" >> $GITHUB_ENV
-          echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
-          echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
-          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
-          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> $GITHUB_ENV
-          if [ -z "${{ secrets.DEBUG }}" ]; then echo "DEBUG=false" >> $GITHUB_ENV; else echo "DEBUG=${{ secrets.DEBUG }}" >> $GITHUB_ENV; fi
-      - name: Run database migrations
-        run: |
-          python db/migrate.py
-
   deploy:
     runs-on: ubuntu-latest
-    needs: migrate
+    needs: test
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
