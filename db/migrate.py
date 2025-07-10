@@ -199,7 +199,7 @@ async def verify_database():
             # Insert test row
             await database.execute(
                 """
-                INSERT INTO lists (type, title, variant) VALUES (CAST(:type AS listtype), :title, :variant)
+                INSERT INTO lists (type, title, variant) VALUES (CAST(:type AS listtype), :title, CAST(:variant AS variant))
                 """,
                 test_list_data
             )

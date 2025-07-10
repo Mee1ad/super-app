@@ -6,9 +6,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Run Tests
+  test-and-migrate:
+    name: Test Migrations and Run Tests
     runs-on: ubuntu-latest
+    
+    # Add PostgreSQL service container for testing
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U testuser"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     
     steps:
     - name: Checkout code
@@ -33,42 +49,92 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-asyncio aiosqlite
         
-    - name: Create .env file for tests
+    - name: Wait for PostgreSQL
       run: |
-        cp env.example .env
-        echo "ENVIRONMENT=test" >> .env
-        echo "DATABASE_URL=sqlite:///./test.db" >> .env
+        echo "Waiting for PostgreSQL to be ready..."
+        for i in {1..30}; do
+          pg_isready -h localhost -p 5432 -U testuser && break
+          echo "PostgreSQL not ready yet, waiting..."
+          sleep 2
+        done
+        
+    - name: Set test environment variables
+      run: |
+        echo "ENVIRONMENT=development" >> $GITHUB_ENV
+        echo "DB_HOST=localhost" >> $GITHUB_ENV
+        echo "DB_PORT=5432" >> $GITHUB_ENV
+        echo "DB_NAME=testdb" >> $GITHUB_ENV
+        echo "DB_USER=testuser" >> $GITHUB_ENV
+        echo "DB_PASSWORD=testpass" >> $GITHUB_ENV
+        echo "SECRET_KEY=test-secret-key" >> $GITHUB_ENV
+        echo "DEBUG=false" >> $GITHUB_ENV
+        
+    - name: Test database migrations
+      run: |
+        echo "🧪 Testing database migrations on fresh PostgreSQL instance..."
+        python db/migrate.py
+        echo "✅ Migrations completed successfully!"
         
     - name: Run unit tests
       run: |
+        echo "🧪 Running unit tests..."
         pytest tests/unit/ -v --disable-warnings --tb=short
         
     - name: Run CORS tests
       run: |
+        echo "🧪 Running CORS tests..."
         pytest tests/test_cors.py -v --disable-warnings --tb=short
         
-    - name: Run integration tests (if database available)
+    - name: Run integration tests
       run: |
-        pytest tests/integration/ -v --disable-warnings --tb=short || echo "Integration tests skipped - database not available"
-      continue-on-error: true
+        echo "🧪 Running integration tests against migrated database..."
+        pytest tests/integration/ -v --disable-warnings --tb=short
         
-    - name: Test database migrations
+    - name: Verify database state after tests
       run: |
-        python db/migrate.py
-        # Clean up test database file
-        rm -f test.db
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_PORT: ${{ secrets.DB_PORT }}
-        DB_NAME: ${{ secrets.DB_NAME }}
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        echo "🔍 Verifying database state after all tests..."
+        python -c "
+import asyncio
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath('.')))
+from db.session import database
+from core.config import settings
 
-  migrate:
-    name: Run Database Migrations
+async def verify_database():
+    try:
+        await database.connect()
+        # Check if tables exist
+        result = await database.fetch_all(\"\"\"
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name IN ('lists', 'tasks', 'shopping_items')
+            ORDER BY table_name;
+        \"\"\")
+        tables = [row[0] for row in result]
+        print(f'✅ Found tables: {tables}')
+        
+        # Check if migrations table exists
+        result = await database.fetch_all(\"\"\"
+            SELECT name FROM migrations ORDER BY applied_at;
+        \"\"\")
+        migrations = [row[0] for row in result]
+        print(f'✅ Applied migrations: {migrations}')
+        
+        await database.disconnect()
+        print('✅ Database verification successful!')
+    except Exception as e:
+        print(f'❌ Database verification failed: {e}')
+        sys.exit(1)
+
+asyncio.run(verify_database())
+        "
+
+  migrate-production:
+    name: Run Production Migrations
     runs-on: ubuntu-latest
-    needs: test
+    needs: test-and-migrate
     if: success()
     
     steps:
@@ -85,9 +151,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Run database migrations
+    - name: Run production database migrations
       run: |
+        echo "🚀 Running migrations on production database..."
         python db/migrate.py
+        echo "✅ Production migrations completed successfully!"
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         DB_HOST: ${{ secrets.DB_HOST }}
@@ -96,8 +164,9 @@ jobs:
         DB_USER: ${{ secrets.DB_USER }}
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         
-    - name: Verify database connection
+    - name: Verify production database connection
       run: |
+        echo "🔍 Verifying production database connection..."
         python -c "
 import asyncio
 import sys
@@ -110,10 +179,10 @@ async def test_connection():
     try:
         await database.connect()
         result = await database.fetch_all('SELECT version();')
-        print(f'✅ Database connection successful: {result[0][0]}')
+        print(f'✅ Production database connection successful: {result[0][0]}')
         await database.disconnect()
     except Exception as e:
-        print(f'❌ Database connection failed: {e}')
+        print(f'❌ Production database connection failed: {e}')
         sys.exit(1)
 
 asyncio.run(test_connection())
@@ -129,7 +198,7 @@ asyncio.run(test_connection())
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [test, migrate]
+    needs: [test-and-migrate, migrate-production]
     if: success()
     
     steps:
