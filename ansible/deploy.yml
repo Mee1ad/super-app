@@ -849,8 +849,14 @@
     - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        docker compose up -d
+        DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" DB_USER="$DB_USER" SECRET_KEY="$SECRET_KEY" DEBUG: "{{ lookup('env', 'DEBUG', default='false') }}" docker compose up -d
       become_user: "{{ app_user }}"
+      environment:
+        DB_HOST: "{{ lookup('env', 'DB_HOST', default='localhost') }}"
+        DB_PORT: "{{ lookup('env', 'DB_PORT', default='5432') }}"
+        DB_NAME: "{{ lookup('env', 'DB_NAME', default='superapp') }}"
+        DB_USER: "{{ lookup('env', 'DB_USER', default='postgres') }}"
+        SECRET_KEY: "{{ lookup('env', 'SECRET_KEY', default='your-secret-key') }}"
       when: not ansible_check_mode
       tags: [docker, compose, start]
 

@@ -59,10 +59,22 @@ jobs:
         SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_TOKEN: ${{ secrets.CR_PAT }}
+        DB_HOST: ${{ secrets.DB_HOST }}
+        DB_PORT: ${{ secrets.DB_PORT }}
+        DB_NAME: ${{ secrets.DB_NAME }}
+        DB_USER: ${{ secrets.DB_USER }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        DEBUG: ${{ secrets.DEBUG }}
       run: |
         echo "Environment variables:"
         echo "SERVER_IP: $SERVER_IP"
         echo "ANSIBLE_USER: $ANSIBLE_USER"
         echo "SSH_KEY_FILE: $SSH_KEY_FILE"
         echo "GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
+        echo "DB_HOST: $DB_HOST"
+        echo "DB_PORT: $DB_PORT"
+        echo "DB_NAME: $DB_NAME"
+        echo "DB_USER: $DB_USER"
+        echo "SECRET_KEY: $SECRET_KEY"
         ansible-playbook -i ansible/inventory.yml ansible/deploy.yml 

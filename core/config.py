@@ -4,19 +4,17 @@ import os
 class Settings(BaseSettings):
     # Environment
     environment: str = "development"
-    debug: bool = True
+    debug: bool = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes", "on")
     
     # Security
     secret_key: str = "your-secret-key"
     
-    # Database Configuration (separate components)
-    db_host: str = "localhost"
-    db_port: int = 5432
-    db_name: str = "superapp"
-    db_user: str = "postgres"
-    db_password: str = "admin"
-    
-    # Docker Secrets (production)
+    # Database Configuration (all from env)
+    db_host: str = os.getenv("DB_HOST", "localhost")
+    db_port: int = int(os.getenv("DB_PORT", 5432))
+    db_name: str = os.getenv("DB_NAME", "superapp")
+    db_user: str = os.getenv("DB_USER", "postgres")
+    db_password: str = os.getenv("DB_PASSWORD", "admin")
     db_password_file: str = "/run/secrets/db_password"
     
     class Config:
