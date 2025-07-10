@@ -9,8 +9,49 @@
     secrets_dir: "/run/secrets"
     local_secrets_dir: "../secrets"
     app_dir: "/opt/super-app"
-    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='Mee1ad/super-app') }}"
+    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='Mee1ad/super-app-backend') }}"
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+
+  pre_tasks:
+    - name: Debug GitHub variables
+      debug:
+        msg: |
+          GitHub Repository: {{ github_repository }}
+          GitHub Token: {{ '***SET***' if github_token else '***NOT SET***' }}
+
+    - name: Test GitHub token validity
+      uri:
+        url: "https://api.github.com/user"
+        method: GET
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+        status_code: [200, 401, 403]
+      register: github_token_test
+      when: github_token is defined
+      ignore_errors: yes
+
+    - name: Debug GitHub token test result
+      debug:
+        msg: "GitHub token test result: {{ github_token_test.status }}"
+      when: github_token_test is defined
+
+    - name: Test repository accessibility
+      uri:
+        url: "https://api.github.com/repos/{{ github_repository }}"
+        method: GET
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+        status_code: [200, 404, 403]
+      register: github_repo_test
+      when: github_token is defined
+      ignore_errors: yes
+
+    - name: Debug repository test result
+      debug:
+        msg: "Repository test result: {{ github_repo_test.status }}"
+      when: github_repo_test is defined
 
   tasks:
     - name: Update system packages
@@ -288,14 +329,6 @@
         recursive: yes
       when: ansible_check_mode == false
 
-    - name: Create application directory
-      file:
-        path: "{{ app_dir }}"
-        state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0755'
-
     - name: Create secrets directory
       file:
         path: "{{ secrets_dir }}"
@@ -345,33 +378,6 @@
         mode: '0600'
       ignore_errors: no
 
-    - name: Copy docker-compose.yml
-      copy:
-        src: "../docker-compose.yml"
-        dest: "{{ app_dir }}/docker-compose.yml"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
-      when: not ansible_check_mode
-
-    - name: Copy Dockerfile
-      copy:
-        src: "../Dockerfile"
-        dest: "{{ app_dir }}/Dockerfile"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
-      when: not ansible_check_mode
-
-    - name: Copy requirements.txt
-      copy:
-        src: "../requirements.txt"
-        dest: "{{ app_dir }}/requirements.txt"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
-      when: not ansible_check_mode
-
     - name: Check if application directory exists
       stat:
         path: "{{ app_dir }}"
@@ -390,22 +396,33 @@
 
     - name: Clone application repository (if not exists)
       git:
-        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app') }}.git"
+        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app-backend') }}.git"
         dest: "{{ app_dir }}"
         version: main
-      when: not ansible_check_mode and not app_dir_stat.stat.exists
+        depth: 1
+      when: not ansible_check_mode and not app_dir_stat.stat.exists and github_token and github_token_test.status == 200
       register: git_clone_result
       ignore_errors: no
 
     - name: Pull latest changes (if git repo exists)
       git:
-        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app') }}.git"
+        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app-backend') }}.git"
         dest: "{{ app_dir }}"
         version: main
         force: yes
-      when: not ansible_check_mode and app_dir_stat.stat.exists and git_repo_stat.stat.exists
+      when: not ansible_check_mode and app_dir_stat.stat.exists and git_repo_stat.stat.exists and github_token and github_token_test.status == 200
       register: git_pull_result
       ignore_errors: no
+
+    - name: Debug git operations skipped due to missing token
+      debug:
+        msg: "Git operations skipped - GitHub token not available"
+      when: not github_token
+
+    - name: Debug git operations skipped due to invalid token
+      debug:
+        msg: "Git operations skipped - GitHub token is invalid (status: {{ github_token_test.status }})"
+      when: github_token and github_token_test.status != 200
 
     - name: Check if app directory exists after git operations
       stat:
@@ -415,46 +432,94 @@
     - name: Debug git clone result
       debug:
         var: git_clone_result
-      when: git_clone_result is defined and not ansible_check_mode
+      when: git_clone_result is defined
 
     - name: Debug git pull result
       debug:
         var: git_pull_result
-      when: git_pull_result is defined and not ansible_check_mode
+      when: git_pull_result is defined
 
     - name: Debug app directory after git
       debug:
         msg: "App directory exists after git: {{ app_dir_after_git.stat.exists }}"
-      when: not ansible_check_mode
 
     - name: Fail if git operations didn't create the directory
       fail:
         msg: "Git operations failed - app directory does not exist. Check git clone/pull results above."
-      when: not ansible_check_mode and not app_dir_after_git.stat.exists
+      when: not ansible_check_mode and not app_dir_after_git.stat.exists and github_token and github_token_test.status == 200
+
+    - name: Skip git operations in check mode
+      debug:
+        msg: "Git operations (clone/pull) would be performed in real run"
+      when: ansible_check_mode
+
+    - name: Create application directory if git operations failed
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+      when: not app_dir_after_git.stat.exists or (github_token and github_token_test.status != 200)
+
+    - name: Ensure application directory has correct ownership
+      file:
+        path: "{{ app_dir }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        recurse: yes
+      when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
 
     - name: Debug cloned files
       shell: ls -la {{ app_dir }}
       register: cloned_files_debug
       changed_when: false
-      when: not ansible_check_mode and app_dir_after_git.stat.exists
+      when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
 
     - name: Show cloned files
       debug:
         var: cloned_files_debug.stdout_lines
-      when: cloned_files_debug is defined and not ansible_check_mode and app_dir_after_git.stat.exists
+      when: cloned_files_debug is defined and (app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200))
+
+    - name: Copy docker-compose.yml if not exists
+      copy:
+        src: "../docker-compose.yml"
+        dest: "{{ app_dir }}/docker-compose.yml"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+
+    - name: Copy Dockerfile if not exists
+      copy:
+        src: "../Dockerfile"
+        dest: "{{ app_dir }}/Dockerfile"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+
+    - name: Copy requirements.txt if not exists
+      copy:
+        src: "../requirements.txt"
+        dest: "{{ app_dir }}/requirements.txt"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
 
     - name: Build Docker image locally
       shell: |
         cd {{ app_dir }}
         docker build -t super-app-backend .
       become_user: "{{ app_user }}"
-      when: not ansible_check_mode
+      when: not ansible_check_mode and (app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200))
       register: docker_build_result
 
     - name: Debug Docker build result
       debug:
         msg: "Docker build result: {{ docker_build_result }}"
-      when: docker_build_result is defined and not ansible_check_mode
+      when: docker_build_result is defined and not ansible_check_mode and (app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200))
 
     - name: Install PostgreSQL
       apt:
