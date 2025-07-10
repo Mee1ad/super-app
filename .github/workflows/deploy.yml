@@ -60,7 +60,7 @@ jobs:
           echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
           echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> $GITHUB_ENV
-          echo "DEBUG=${{ secrets.DEBUG }}" >> $GITHUB_ENV
+          if [ -z "${{ secrets.DEBUG }}" ]; then echo "DEBUG=false" >> $GITHUB_ENV; else echo "DEBUG=${{ secrets.DEBUG }}" >> $GITHUB_ENV; fi
       - name: Run database migrations
         run: |
           python db/migrate.py
