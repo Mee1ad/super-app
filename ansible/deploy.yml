@@ -394,6 +394,7 @@
         dest: "{{ app_dir }}"
         version: main
       when: not ansible_check_mode and not app_dir_stat.stat.exists
+      register: git_clone_result
 
     - name: Pull latest changes (if git repo exists)
       git:
@@ -402,17 +403,38 @@
         version: main
         force: yes
       when: not ansible_check_mode and app_dir_stat.stat.exists and git_repo_stat.stat.exists
+      register: git_pull_result
+
+    - name: Check if app directory exists after git operations
+      stat:
+        path: "{{ app_dir }}"
+      register: app_dir_after_git
+
+    - name: Debug git clone result
+      debug:
+        var: git_clone_result
+      when: git_clone_result is defined and not ansible_check_mode
+
+    - name: Debug git pull result
+      debug:
+        var: git_pull_result
+      when: git_pull_result is defined and not ansible_check_mode
+
+    - name: Debug app directory after git
+      debug:
+        msg: "App directory exists after git: {{ app_dir_after_git.stat.exists }}"
+      when: not ansible_check_mode
 
     - name: Debug cloned files
       shell: ls -la {{ app_dir }}
       register: cloned_files_debug
-      changed_when: falsewc
-      when: not ansible_check_mode
+      changed_when: false
+      when: not ansible_check_mode and app_dir_after_git.stat.exists
 
     - name: Show cloned files
       debug:
         var: cloned_files_debug.stdout_lines
-      when: cloned_files_debug is defined and not ansible_check_mode
+      when: cloned_files_debug is defined and not ansible_check_mode and app_dir_after_git.stat.exists
 
     - name: Build Docker image locally
       shell: |
