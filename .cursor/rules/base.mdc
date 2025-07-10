@@ -155,6 +155,15 @@ project/
 * **Maintain test coverage above 80%**
 * **Test both happy path and edge cases**
 
+### Commit Messages
+
+* Use short and concise words
+* Keep commit messages under 50 characters for the subject line
+* Use imperative mood ("add feature" not "added feature")
+* Start with lowercase letters
+* Use present tense
+* Examples: "fix auth bug", "add user validation", "update docs"
+
 ---
 
 > Extend this guide per project requirements. Consistency and clarity first.

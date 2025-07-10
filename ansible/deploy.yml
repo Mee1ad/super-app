@@ -9,7 +9,7 @@
     secrets_dir: "/run/secrets"
     local_secrets_dir: "../secrets"
     app_dir: "/opt/super-app"
-    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='Mee1ad/super-app-backend') }}"
+    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='Mee1ad/super-app') }}"
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
 
   pre_tasks:
@@ -18,6 +18,7 @@
         msg: |
           GitHub Repository: {{ github_repository }}
           GitHub Token: {{ '***SET***' if github_token else '***NOT SET***' }}
+      tags: [debug, github]
 
     - name: Test GitHub token validity
       uri:
@@ -30,11 +31,13 @@
       register: github_token_test
       when: github_token is defined
       ignore_errors: yes
+      tags: [github, validation]
 
     - name: Debug GitHub token test result
       debug:
         msg: "GitHub token test result: {{ github_token_test.status }}"
       when: github_token_test is defined
+      tags: [debug, github]
 
     - name: Test repository accessibility
       uri:
@@ -47,11 +50,13 @@
       register: github_repo_test
       when: github_token is defined
       ignore_errors: yes
+      tags: [github, validation]
 
     - name: Debug repository test result
       debug:
         msg: "Repository test result: {{ github_repo_test.status }}"
       when: github_repo_test is defined
+      tags: [debug, github]
 
   tasks:
     - name: Update system packages
@@ -59,6 +64,7 @@
         update_cache: yes
         upgrade: yes
         cache_valid_time: 3600
+      tags: [system, packages, update]
 
     - name: Install required packages
       apt:
@@ -71,11 +77,13 @@
           - ca-certificates
           - software-properties-common
         state: present
+      tags: [system, packages, install]
 
     - name: Create application group
       group:
         name: "{{ app_group }}"
         state: present
+      tags: [users, setup]
 
     - name: Create application user
       user:
@@ -84,12 +92,14 @@
         shell: /bin/bash
         create_home: yes
         system: no
+      tags: [users, setup]
 
     - name: Add user to sudo group
       user:
         name: "{{ app_user }}"
         groups: sudo
         append: yes
+      tags: [users, sudo]
 
     - name: Create .ssh directory for app user
       file:
@@ -98,6 +108,7 @@
         owner: "{{ app_user }}"
         group: "{{ app_group }}"
         mode: '0700'
+      tags: [ssh, setup]
 
     # Set up SSH public key for app user
     # Method 1: Use SSH_PUBLIC_KEY environment variable (GitHub Actions)
@@ -109,6 +120,7 @@
         group: "{{ app_group }}"
         mode: '0600'
       when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') != ''
+      tags: [ssh, keys]
 
     # Method 2: Copy from local file (local development)
     - name: Check if local SSH public key exists
@@ -116,7 +128,9 @@
         path: "/mnt/c/Users/Soheil/.ssh/super-app-backend.pub"
       register: local_ssh_pub_key_stat
       delegate_to: localhost
+      become: false
       when: lookup('env', 'SSH_PUBLIC_KEY', default='') == ''
+      tags: [ssh, keys, local]
 
     - name: Copy local SSH public key to app user
       copy:
@@ -126,6 +140,7 @@
         group: "{{ app_group }}"
         mode: '0600'
       when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') == '' and local_ssh_pub_key_stat.stat.exists
+      tags: [ssh, keys, local]
 
     # Method 3: Generate from private key (fallback)
     - name: Generate public key from private key (fallback)
@@ -134,6 +149,7 @@
         creates: ~/.ssh/super-app-backend.pub
       when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') == '' and not local_ssh_pub_key_stat.stat.exists
       delegate_to: localhost
+      tags: [ssh, keys, fallback]
 
     - name: Copy generated SSH public key to app user (fallback)
       copy:
@@ -143,10 +159,12 @@
         group: "{{ app_group }}"
         mode: '0600'
       when: ansible_check_mode == false and lookup('env', 'SSH_PUBLIC_KEY', default='') == '' and not local_ssh_pub_key_stat.stat.exists
+      tags: [ssh, keys, fallback]
 
     - name: Debug Ubuntu version
       debug:
         msg: "Ubuntu version: {{ ansible_distribution_version }} ({{ ansible_distribution_release }})"
+      tags: [debug, system]
 
     - name: Install Docker dependencies
       apt:
@@ -156,12 +174,14 @@
           - gnupg
         state: present
         update_cache: yes
+      tags: [docker, dependencies]
 
     - name: Create keyrings directory
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: '0755'
+      tags: [docker, setup]
 
     - name: Add Docker GPG key
       shell: |
@@ -169,12 +189,14 @@
       args:
         creates: /etc/apt/keyrings/docker.gpg
       check_mode: no
+      tags: [docker, keys]
 
     - name: Set permissions on Docker GPG key
       file:
         path: /etc/apt/keyrings/docker.gpg
         mode: '0644'
       when: ansible_check_mode == false or (ansible_check_mode and lookup('file', '/etc/apt/keyrings/docker.gpg', errors='ignore') != '')
+      tags: [docker, keys, security]
 
     - name: Add Docker repository
       shell: |
@@ -182,32 +204,38 @@
       args:
         creates: /etc/apt/sources.list.d/docker.list
       check_mode: no
+      tags: [docker, repository]
 
     - name: Update apt cache after adding Docker repo
       apt:
         update_cache: yes
+      tags: [docker, packages]
 
     - name: Debug Docker repository file
       shell: cat /etc/apt/sources.list.d/docker.list
       register: docker_repo_content
       changed_when: false
       ignore_errors: yes
+      tags: [debug, docker]
 
     - name: Show Docker repository content
       debug:
         var: docker_repo_content.stdout_lines
       when: docker_repo_content is defined
+      tags: [debug, docker]
 
     - name: Debug available Docker packages after repo addition
       shell: apt-cache search docker-ce
       register: docker_packages_after
       changed_when: false
       ignore_errors: yes
+      tags: [debug, docker]
 
     - name: Show available Docker packages
       debug:
         var: docker_packages_after.stdout_lines
       when: docker_packages_after is defined
+      tags: [debug, docker]
 
     - name: Install Docker Engine
       apt:
@@ -221,21 +249,25 @@
         update_cache: yes
       when: not ansible_check_mode
       ignore_errors: yes
+      tags: [docker, install]
 
     - name: Skip Docker installation in check mode
       debug:
         msg: "Docker installation skipped in check mode - packages would be installed in real run"
       when: ansible_check_mode
+      tags: [docker, check-mode]
 
     - name: Check if Docker is installed
       stat:
         path: /usr/bin/docker
       register: docker_binary_check
+      tags: [docker, verification]
 
     - name: Check if Docker daemon is installed
       stat:
         path: /usr/bin/dockerd
       register: dockerd_binary_check
+      tags: [docker, verification]
 
     - name: Get Docker version
       shell: docker --version
@@ -243,6 +275,7 @@
       changed_when: false
       when: docker_binary_check.stat.exists
       ignore_errors: yes
+      tags: [docker, verification]
 
     - name: Debug Docker installation status
       debug:
@@ -250,16 +283,19 @@
           Docker binary exists: {{ docker_binary_check.stat.exists }}
           Docker daemon exists: {{ dockerd_binary_check.stat.exists }}
           Docker version: {{ docker_version.stdout if docker_version is defined and ('rc' in docker_version) and docker_version.rc == 0 else 'Not available' }}
+      tags: [debug, docker]
 
     - name: Check Docker service status
       shell: systemctl is-active docker
       register: docker_service_status
       changed_when: false
       ignore_errors: yes
+      tags: [docker, service]
 
     - name: Debug Docker service status
       debug:
         msg: "Docker service status: {{ docker_service_status.stdout if docker_service_status is defined else 'Service not found' }}"
+      tags: [debug, docker]
 
     - name: Start Docker service if not running
       systemd:
@@ -268,6 +304,7 @@
         enabled: yes
       when: docker_service_status is defined and docker_service_status.rc != 0 and not ansible_check_mode
       ignore_errors: yes
+      tags: [docker, service]
 
     - name: Alternative Docker service start (using dockerd)
       shell: |
@@ -276,6 +313,7 @@
         systemctl enable docker
       when: docker_service_status is defined and docker_service_status.rc != 0 and not ansible_check_mode
       ignore_errors: yes
+      tags: [docker, service, fallback]
 
     - name: Verify Docker is running
       shell: docker info
@@ -283,16 +321,19 @@
       changed_when: false
       when: docker_binary_check.stat.exists
       ignore_errors: yes
+      tags: [docker, verification]
 
     - name: Debug Docker info
       debug:
         msg: "Docker info: {{ docker_info.stdout if docker_info is defined and ('stdout' in docker_info) else 'Docker not running' }}"
+      tags: [debug, docker]
 
     - name: Add user to docker group
       user:
         name: "{{ app_user }}"
         groups: docker
         append: yes
+      tags: [docker, users, permissions]
 
     - name: Configure passwordless sudo for app user
       lineinfile:
@@ -302,6 +343,7 @@
         mode: '0440'
         validate: 'visudo -cf %s'
       when: not ansible_check_mode
+      tags: [sudo, security]
 
     - name: Login to GitHub Container Registry
       docker_login:
@@ -311,16 +353,19 @@
       when: github_token is defined and docker_info is defined and (not ansible_check_mode) and docker_binary_check.stat.exists
       ignore_errors: yes
       register: github_login_result
+      tags: [docker, github, registry]
 
     - name: Debug GitHub login status
       debug:
         msg: "GitHub Container Registry login: {{ 'Success' if github_login_result is defined and github_login_result.changed else 'Skipped or Failed' }}"
       when: github_token is defined and (not ansible_check_mode) and docker_binary_check.stat.exists
+      tags: [debug, docker, github]
 
     - name: Skip Docker operations in check mode
       debug:
         msg: "Docker operations (login, pull, compose) would be performed in real run"
       when: ansible_check_mode
+      tags: [docker, check-mode]
 
     - name: Copy secrets directory to server
       synchronize:
@@ -328,6 +373,7 @@
         dest: "/tmp/secrets/"
         recursive: yes
       when: ansible_check_mode == false
+      tags: [secrets, copy]
 
     - name: Create secrets directory
       file:
@@ -336,11 +382,13 @@
         owner: root
         group: root
         mode: '0700'
+      tags: [secrets, setup]
 
     - name: Check if local secrets directory exists
       stat:
         path: "{{ local_secrets_dir }}"
       register: local_secrets_dir_stat
+      tags: [secrets, verification]
 
     - name: Copy secret files
       copy:
@@ -350,24 +398,49 @@
         group: root
         mode: '0600'
       when: local_secrets_dir_stat.stat.exists
+      tags: [secrets, copy]
 
-    - name: Ensure db_password is present in /run/secrets
+    - name: Ensure db_password_postgres is present in /run/secrets
       copy:
-        src: "{{ local_secrets_dir }}/db_password"
-        dest: "{{ secrets_dir }}/db_password"
+        src: "{{ local_secrets_dir }}/db_password_postgres"
+        dest: "{{ secrets_dir }}/db_password_postgres"
         owner: root
         group: root
         mode: '0600'
       ignore_errors: no
+      tags: [secrets, database]
 
-    - name: Debug db_password file presence
+    - name: Ensure db_password_superapp is present in /run/secrets
+      copy:
+        src: "{{ local_secrets_dir }}/db_password_superapp"
+        dest: "{{ secrets_dir }}/db_password_superapp"
+        owner: root
+        group: root
+        mode: '0600'
+      ignore_errors: no
+      tags: [secrets, database]
+
+    - name: Debug db_password_postgres file presence
       stat:
-        path: "{{ secrets_dir }}/db_password"
-      register: db_password_file_debug
+        path: "{{ secrets_dir }}/db_password_postgres"
+      register: db_password_postgres_file_debug
+      tags: [debug, secrets, database]
 
-    - name: Show db_password file stat
+    - name: Debug db_password_superapp file presence
+      stat:
+        path: "{{ secrets_dir }}/db_password_superapp"
+      register: db_password_superapp_file_debug
+      tags: [debug, secrets, database]
+
+    - name: Show db_password_postgres file stat
       debug:
-        var: db_password_file_debug
+        var: db_password_postgres_file_debug
+      tags: [debug, secrets, database]
+
+    - name: Show db_password_superapp file stat
+      debug:
+        var: db_password_superapp_file_debug
+      tags: [debug, secrets, database]
 
     - name: Ensure api_key is present in /run/secrets
       copy:
@@ -377,22 +450,26 @@
         group: root
         mode: '0600'
       ignore_errors: no
+      tags: [secrets, api]
 
     - name: Check if application directory exists
       stat:
         path: "{{ app_dir }}"
       register: app_dir_stat
+      tags: [app, verification]
 
     - name: Check if directory is a git repository
       stat:
         path: "{{ app_dir }}/.git"
       register: git_repo_stat
+      tags: [app, git, verification]
 
     - name: Remove directory if exists but is not a git repository
       file:
         path: "{{ app_dir }}"
         state: absent
       when: not ansible_check_mode and app_dir_stat.stat.exists and not git_repo_stat.stat.exists
+      tags: [app, cleanup]
 
     - name: Clone application repository (if not exists)
       git:
@@ -403,55 +480,65 @@
       when: not ansible_check_mode and not app_dir_stat.stat.exists and github_token and github_token_test.status == 200
       register: git_clone_result
       ignore_errors: no
+      tags: [app, git, clone]
 
     - name: Pull latest changes (if git repo exists)
       git:
-        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app-backend') }}.git"
+        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app') }}.git"
         dest: "{{ app_dir }}"
         version: main
         force: yes
       when: not ansible_check_mode and app_dir_stat.stat.exists and git_repo_stat.stat.exists and github_token and github_token_test.status == 200
       register: git_pull_result
       ignore_errors: no
+      tags: [app, git, pull]
 
     - name: Debug git operations skipped due to missing token
       debug:
         msg: "Git operations skipped - GitHub token not available"
       when: not github_token
+      tags: [debug, git, github]
 
     - name: Debug git operations skipped due to invalid token
       debug:
         msg: "Git operations skipped - GitHub token is invalid (status: {{ github_token_test.status }})"
       when: github_token and github_token_test.status != 200
+      tags: [debug, git, github]
 
     - name: Check if app directory exists after git operations
       stat:
         path: "{{ app_dir }}"
       register: app_dir_after_git
+      tags: [app, verification]
 
     - name: Debug git clone result
       debug:
         var: git_clone_result
       when: git_clone_result is defined
+      tags: [debug, git]
 
     - name: Debug git pull result
       debug:
         var: git_pull_result
       when: git_pull_result is defined
+      tags: [debug, git]
 
     - name: Debug app directory after git
       debug:
         msg: "App directory exists after git: {{ app_dir_after_git.stat.exists }}"
+      tags: [debug, app]
 
     - name: Fail if git operations didn't create the directory
       fail:
         msg: "Git operations failed - app directory does not exist. Check git clone/pull results above."
       when: not ansible_check_mode and not app_dir_after_git.stat.exists and github_token and github_token_test.status == 200
+      tags: [app, git, validation]
 
     - name: Skip git operations in check mode
       debug:
         msg: "Git operations (clone/pull) would be performed in real run"
       when: ansible_check_mode
+      tags: [git, check-mode]
 
     - name: Create application directory if git operations failed
       file:
@@ -461,6 +548,7 @@
         group: "{{ app_group }}"
         mode: '0755'
       when: not app_dir_after_git.stat.exists or (github_token and github_token_test.status != 200)
+      tags: [app, setup]
 
     - name: Ensure application directory has correct ownership
       file:
@@ -469,17 +557,20 @@
         group: "{{ app_group }}"
         recurse: yes
       when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+      tags: [app, permissions]
 
     - name: Debug cloned files
       shell: ls -la {{ app_dir }}
       register: cloned_files_debug
       changed_when: false
       when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+      tags: [debug, app]
 
     - name: Show cloned files
       debug:
         var: cloned_files_debug.stdout_lines
       when: cloned_files_debug is defined and (app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200))
+      tags: [debug, app]
 
     - name: Copy docker-compose.yml if not exists
       copy:
@@ -489,6 +580,7 @@
         group: "{{ app_group }}"
         mode: '0644'
       when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+      tags: [app, docker, files]
 
     - name: Copy Dockerfile if not exists
       copy:
@@ -498,6 +590,7 @@
         group: "{{ app_group }}"
         mode: '0644'
       when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+      tags: [app, docker, files]
 
     - name: Copy requirements.txt if not exists
       copy:
@@ -507,6 +600,7 @@
         group: "{{ app_group }}"
         mode: '0644'
       when: app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200)
+      tags: [app, files]
 
     - name: Build Docker image locally
       shell: |
@@ -515,28 +609,33 @@
       become_user: "{{ app_user }}"
       when: not ansible_check_mode and (app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200))
       register: docker_build_result
+      tags: [docker, build]
 
     - name: Debug Docker build result
       debug:
         msg: "Docker build result: {{ docker_build_result }}"
       when: docker_build_result is defined and not ansible_check_mode and (app_dir_after_git.stat.exists or not github_token or (github_token and github_token_test.status != 200))
+      tags: [debug, docker]
 
     - name: Install PostgreSQL
       apt:
         update_cache: yes
         cache_valid_time: 0
       register: apt_update_result
+      tags: [postgresql, packages]
 
     - name: Check available PostgreSQL packages
       shell: apt-cache search postgresql
       register: postgresql_packages
       changed_when: false
       ignore_errors: yes
+      tags: [debug, postgresql]
 
     - name: Debug available PostgreSQL packages
       debug:
         var: postgresql_packages.stdout_lines
       when: postgresql_packages is defined
+      tags: [debug, postgresql]
 
     - name: Install PostgreSQL
       apt:
@@ -546,11 +645,13 @@
       register: postgresql_install_result
       ignore_errors: yes
       when: not ansible_check_mode
+      tags: [postgresql, install]
 
     - name: Debug PostgreSQL installation result
       debug:
         var: postgresql_install_result
       when: postgresql_install_result is defined
+      tags: [debug, postgresql]
 
     - name: Add PostgreSQL official repository if apt install failed
       shell: |
@@ -561,6 +662,7 @@
       when: postgresql_install_result is failed and not ansible_check_mode
       register: postgresql_repo_result
       ignore_errors: yes
+      tags: [postgresql, repository, fallback]
 
     - name: Install PostgreSQL from official repo if needed
       apt:
@@ -570,11 +672,13 @@
       when: postgresql_install_result is failed and not ansible_check_mode
       register: postgresql_official_install_result
       ignore_errors: yes
+      tags: [postgresql, install, fallback]
 
     - name: Debug PostgreSQL official installation result
       debug:
         var: postgresql_official_install_result
       when: postgresql_official_install_result is defined
+      tags: [debug, postgresql]
 
     - name: Ensure PostgreSQL is running
       systemd:
@@ -582,6 +686,7 @@
         state: started
         enabled: yes
       when: not ansible_check_mode
+      tags: [postgresql, service]
 
     - name: Configure PostgreSQL for local access only (secure)
       become: true
@@ -592,6 +697,7 @@
         backup: yes
       notify: Reload PostgreSQL
       when: not ansible_check_mode
+      tags: [postgresql, security, configuration]
 
     - name: Configure PostgreSQL authentication for local access
       become: true
@@ -602,6 +708,7 @@
         backup: yes
       notify: Reload PostgreSQL
       when: not ansible_check_mode
+      tags: [postgresql, security, authentication]
 
     - name: Ensure PostgreSQL only listens on localhost (security)
       become: true
@@ -612,6 +719,7 @@
         backup: yes
       notify: Reload PostgreSQL
       when: not ansible_check_mode
+      tags: [postgresql, security, firewall]
 
     - name: Reload PostgreSQL configuration
       become: true
@@ -619,6 +727,7 @@
         name: postgresql
         state: reloaded
       when: not ansible_check_mode
+      tags: [postgresql, service]
 
     - name: Ensure PostgreSQL port is NOT exposed in firewall (security)
       ufw:
@@ -626,6 +735,7 @@
         port: '5432'
         proto: tcp
       when: not ansible_check_mode
+      tags: [postgresql, security, firewall]
 
     - name: Install Python PostgreSQL adapter
       apt:
@@ -633,33 +743,39 @@
         state: present
         update_cache: yes
       when: not ansible_check_mode
+      tags: [postgresql, python, dependencies]
 
     - name: Skip PostgreSQL installation in check mode
       debug:
         msg: "PostgreSQL installation skipped in check mode - packages would be installed in real run"
       when: ansible_check_mode
+      tags: [postgresql, check-mode]
 
     - name: Check if db_password_postgres file exists
       stat:
         path: "{{ secrets_dir }}/db_password_postgres"
       register: db_password_postgres_file
+      tags: [database, secrets, verification]
 
     - name: Get db_password_postgres content
       slurp:
         src: "{{ secrets_dir }}/db_password_postgres"
       register: db_password_postgres_content
       when: db_password_postgres_file.stat.exists and not ansible_check_mode
+      tags: [database, secrets]
 
     - name: Check if db_password_superapp file exists
       stat:
         path: "{{ secrets_dir }}/db_password_superapp"
       register: db_password_superapp_file
+      tags: [database, secrets, verification]
 
     - name: Get db_password_superapp content
       slurp:
         src: "{{ secrets_dir }}/db_password_superapp"
       register: db_password_superapp_content
       when: db_password_superapp_file.stat.exists and not ansible_check_mode
+      tags: [database, secrets]
 
     - name: Set Postgres password from secret if available
       become_user: postgres
@@ -668,6 +784,7 @@
         password: "{{ db_password_postgres_content.content | b64decode | default('postgres', true) }}"
         state: present
       when: db_password_postgres_file.stat.exists and not ansible_check_mode
+      tags: [database, postgresql, users]
 
     - name: Set Postgres password to default if secret missing
       become_user: postgres
@@ -676,22 +793,32 @@
         password: "postgres"
         state: present
       when: not db_password_postgres_file.stat.exists and not ansible_check_mode
+      tags: [database, postgresql, users]
 
-    - name: Create application db user from secret
+    - name: Set superapp user password from secret if available
       become_user: postgres
       postgresql_user:
         name: superapp
         password: "{{ db_password_superapp_content.content | b64decode | default('superapp123', true) }}"
         state: present
       when: db_password_superapp_file.stat.exists and not ansible_check_mode
+      tags: [database, postgresql, users]
 
-    - name: Create application db user with default password if secret missing
+    - name: Set superapp user password to default if secret missing
       become_user: postgres
       postgresql_user:
         name: superapp
         password: "superapp123"
         state: present
       when: not db_password_superapp_file.stat.exists and not ansible_check_mode
+      tags: [database, postgresql, users]
+
+    - name: Set superapp user password in PostgreSQL
+      become_user: postgres
+      shell: |
+        psql -U postgres -c "ALTER USER superapp WITH PASSWORD '{{ db_password_superapp_content.content | b64decode | default('superapp123', true) if db_password_superapp_file.stat.exists else 'superapp123' }}';"
+      when: not ansible_check_mode
+      tags: [database, postgresql, users, password-update]
 
     - name: Grant all privileges on database to user
       become_user: postgres
@@ -702,11 +829,13 @@
         state: present
         login_db: postgres
       when: (db_password_superapp_file.stat.exists or not db_password_superapp_file.stat.exists) and not ansible_check_mode
+      tags: [database, postgresql, permissions]
 
     - name: Skip database operations in check mode
       debug:
         msg: "Database operations (password set, user/db creation) would be performed in real run"
       when: ansible_check_mode
+      tags: [database, check-mode]
 
     - name: Stop existing containers
       shell: |
@@ -715,6 +844,7 @@
       become_user: "{{ app_user }}"
       ignore_errors: yes
       when: not ansible_check_mode
+      tags: [docker, compose, stop]
 
     - name: Start application with docker compose
       shell: |
@@ -722,6 +852,7 @@
         docker compose up -d
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
+      tags: [docker, compose, start]
 
     - name: Wait for application to be ready
       uri:
@@ -734,16 +865,19 @@
       delay: 5
       ignore_errors: yes
       when: not ansible_check_mode
+      tags: [app, health-check]
 
     - name: Show deployment status
       debug:
         msg: "Application deployed successfully! Access at http://{{ ansible_default_ipv4.address }}:8000"
       when: not ansible_check_mode
+      tags: [app, deployment, status]
 
     - name: Skip application deployment in check mode
       debug:
         msg: "Application deployment (docker-compose, health checks) would be performed in real run"
       when: ansible_check_mode
+      tags: [app, check-mode]
 
     - name: Install Nginx
       apt:
@@ -751,11 +885,13 @@
         state: present
         update_cache: yes
       when: not ansible_check_mode
+      tags: [nginx, install]
 
     - name: Skip Nginx installation in check mode
       debug:
         msg: "Nginx installation skipped in check mode - would be installed in real run"
       when: ansible_check_mode
+      tags: [nginx, check-mode]
 
     - name: Enable and start Nginx
       systemd:
@@ -763,6 +899,7 @@
         state: started
         enabled: yes
       when: not ansible_check_mode
+      tags: [nginx, service]
 
     - name: Configure Nginx as reverse proxy
       copy:
@@ -782,11 +919,13 @@
           }
       notify: Reload Nginx
       when: not ansible_check_mode
+      tags: [nginx, configuration, reverse-proxy]
 
     - name: Skip Nginx configuration in check mode
       debug:
         msg: "Nginx configuration would be applied in real run"
       when: ansible_check_mode
+      tags: [nginx, check-mode]
 
     - name: Enable Nginx site
       file:
@@ -795,6 +934,7 @@
         state: link
         force: yes
       when: not ansible_check_mode
+      tags: [nginx, configuration]
 
     - name: Remove default Nginx site
       file:
@@ -802,6 +942,7 @@
         state: absent
         force: yes
       when: not ansible_check_mode
+      tags: [nginx, cleanup]
 
     - name: Install UFW firewall
       apt:
@@ -809,17 +950,20 @@
         state: present
         update_cache: yes
       when: not ansible_check_mode
+      tags: [firewall, install]
 
     - name: Skip UFW installation in check mode
       debug:
         msg: "UFW firewall would be installed in real run"
       when: ansible_check_mode
+      tags: [firewall, check-mode]
 
     - name: Allow SSH through firewall
       ufw:
         rule: allow
         name: OpenSSH
       when: not ansible_check_mode
+      tags: [firewall, ssh]
 
     - name: Allow HTTP through firewall
       ufw:
@@ -827,6 +971,7 @@
         port: 80
         proto: tcp
       when: not ansible_check_mode
+      tags: [firewall, http]
 
     - name: Allow HTTPS through firewall
       ufw:
@@ -834,6 +979,7 @@
         port: 443
         proto: tcp
       when: not ansible_check_mode
+      tags: [firewall, https]
 
     - name: Enable UFW firewall
       ufw:
@@ -842,11 +988,13 @@
         direction: incoming
         logging: on
       when: not ansible_check_mode
+      tags: [firewall, security]
 
     - name: Skip firewall configuration in check mode
       debug:
         msg: "Firewall rules would be configured in real run"
       when: ansible_check_mode
+      tags: [firewall, check-mode]
 
     - name: Test SSH access to superapp user
       shell: |
@@ -854,16 +1002,19 @@
       register: ssh_test_result
       ignore_errors: yes
       when: not ansible_check_mode
+      tags: [ssh, test, verification]
 
     - name: Show SSH test result
       debug:
         msg: "SSH test result: {{ ssh_test_result.stdout }}"
       when: not ansible_check_mode
+      tags: [debug, ssh]
 
     - name: Skip SSH test in check mode
       debug:
         msg: "SSH access test would be performed in real run"
       when: ansible_check_mode
+      tags: [ssh, check-mode]
 
   handlers:
     - name: Reload Nginx
@@ -871,9 +1022,11 @@
         name: nginx
         state: reloaded
       when: not ansible_check_mode
+      tags: [nginx, handlers]
 
     - name: Reload PostgreSQL
       systemd:
         name: postgresql
         state: reloaded
-      when: not ansible_check_mode 
+      when: not ansible_check_mode
+      tags: [postgresql, handlers] 
