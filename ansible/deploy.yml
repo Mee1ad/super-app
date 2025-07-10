@@ -709,6 +709,28 @@
       when: ansible_check_mode
       tags: [postgresql, check-mode]
 
+    - name: Check if db_password_postgres file exists
+      stat:
+        path: "{{ secrets_dir }}/db_password_postgres"
+      register: db_password_postgres_file
+      tags: [database, secrets, verification]
+
+    - name: Get db_password_postgres content
+      slurp:
+        src: "{{ secrets_dir }}/db_password_postgres"
+      register: db_password_postgres_content
+      when: db_password_postgres_file.stat.exists and not ansible_check_mode
+      tags: [database, secrets]
+
+    - name: Set Postgres password from secret if available
+      become_user: postgres
+      postgresql_user:
+        name: postgres
+        password: "{{ db_password_postgres_content.content | b64decode | default('postgres', true) }}"
+        state: present
+      when: db_password_postgres_file.stat.exists and not ansible_check_mode
+      tags: [database, postgresql, users]
+
     - name: Check if db_password file exists
       stat:
         path: "{{ secrets_dir }}/db_password"
@@ -722,24 +744,6 @@
       when: db_password_file.stat.exists and not ansible_check_mode
       tags: [database, secrets]
 
-    - name: Set Postgres password from secret if available
-      become_user: postgres
-      postgresql_user:
-        name: postgres
-        password: "{{ db_password_content.content | b64decode | default('postgres', true) }}"
-        state: present
-      when: db_password_file.stat.exists and not ansible_check_mode
-      tags: [database, postgresql, users]
-
-    - name: Set Postgres password to default if secret missing
-      become_user: postgres
-      postgresql_user:
-        name: postgres
-        password: "postgres"
-        state: present
-      when: not db_password_file.stat.exists and not ansible_check_mode
-      tags: [database, postgresql, users]
-
     - name: Set superapp user password from secret if available
       become_user: postgres
       postgresql_user:
@@ -747,15 +751,6 @@
         password: "{{ db_password_content.content | b64decode | default('superapp123', true) }}"
         state: present
       when: db_password_file.stat.exists and not ansible_check_mode
-      tags: [database, postgresql, users]
-
-    - name: Set superapp user password to default if secret missing
-      become_user: postgres
-      postgresql_user:
-        name: superapp
-        password: "superapp123"
-        state: present
-      when: not db_password_file.stat.exists and not ansible_check_mode
       tags: [database, postgresql, users]
 
     - name: Set superapp user password in PostgreSQL
