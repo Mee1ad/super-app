@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 import os
+import sys
 
 class Settings(BaseSettings):
     # Environment
@@ -20,16 +21,21 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "allow"
     
     @property
     def is_production(self) -> bool:
         """Check if running in production environment"""
-        return self.environment.lower() in ["production", "prod"]
+        return self.environment == "production"
     
     @property
     def is_development(self) -> bool:
         """Check if running in development environment"""
         return self.environment.lower() in ["development", "dev", "local"]
+    
+    @property
+    def is_testing(self) -> bool:
+        return self.environment == "test" or "pytest" in sys.modules
     
     def _read_secret_file(self, file_path: str) -> str:
         """Read secret from Docker secret file"""
@@ -43,6 +49,10 @@ class Settings(BaseSettings):
     
     def get_database_url(self) -> str:
         """Get database URL from separate components"""
+        if self.is_testing:
+            # Use SQLite file for testing (better for migrations and CI)
+            return "sqlite:///./test.db"
+        
         if self.is_production:
             # Read password from Docker secret if available
             password = self._read_secret_file(self.db_password_file) or self.db_password
