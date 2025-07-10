@@ -9,7 +9,7 @@
     secrets_dir: "/run/secrets"
     local_secrets_dir: "../secrets"
     app_dir: "/opt/super-app"
-    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='your-username/super-app-backend') }}"
+    github_repository: "{{ lookup('env', 'GITHUB_REPOSITORY', default='Mee1ad/super-app') }}"
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
 
   tasks:
@@ -374,7 +374,7 @@
 
     - name: Clone application repository
       git:
-        repo: "https://github.com/{{ github_repository | default('your-username/super-app-backend') }}.git"
+        repo: "https://{{ github_token }}@github.com/{{ github_repository | default('Mee1ad/super-app') }}.git"
         dest: "{{ app_dir }}"
         version: main
         force: yes
