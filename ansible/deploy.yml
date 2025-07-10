@@ -395,6 +395,7 @@
         version: main
       when: not ansible_check_mode and not app_dir_stat.stat.exists
       register: git_clone_result
+      ignore_errors: no
 
     - name: Pull latest changes (if git repo exists)
       git:
@@ -404,6 +405,7 @@
         force: yes
       when: not ansible_check_mode and app_dir_stat.stat.exists and git_repo_stat.stat.exists
       register: git_pull_result
+      ignore_errors: no
 
     - name: Check if app directory exists after git operations
       stat:
@@ -424,6 +426,11 @@
       debug:
         msg: "App directory exists after git: {{ app_dir_after_git.stat.exists }}"
       when: not ansible_check_mode
+
+    - name: Fail if git operations didn't create the directory
+      fail:
+        msg: "Git operations failed - app directory does not exist. Check git clone/pull results above."
+      when: not ansible_check_mode and not app_dir_after_git.stat.exists
 
     - name: Debug cloned files
       shell: ls -la {{ app_dir }}
