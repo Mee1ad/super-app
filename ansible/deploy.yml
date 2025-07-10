@@ -794,7 +794,7 @@
     - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" DB_USER="$DB_USER" SECRET_KEY="$SECRET_KEY" DEBUG: "{{ lookup('env', 'DEBUG', default='false') }}" docker compose up -d
+        DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" DB_USER="$DB_USER" SECRET_KEY="$SECRET_KEY" DEBUG="$DEBUG" docker compose up -d
       become_user: "{{ app_user }}"
       environment:
         DB_HOST: "{{ lookup('env', 'DB_HOST', default='localhost') }}"
