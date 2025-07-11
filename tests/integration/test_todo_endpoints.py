@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 from uuid import uuid4
 from esmerald.testclient import EsmeraldTestClient
 
@@ -7,10 +8,7 @@ from apps.todo.models import List, Task, ShoppingItem
 from apps.todo.schemas import ListType, Variant
 from db.session import database
 
-# Ensure database is set up for all tests in this module
-pytestmark = pytest.mark.usefixtures("setup_database")
-
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_list():
     """Create a sample list for testing"""
     list_data = {
@@ -19,11 +17,11 @@ async def sample_list():
         "title": "Test List",
         "variant": Variant.DEFAULT
     }
-    list_obj = await List.create(**list_data)
+    list_obj = await List.query.create(**list_data)
     yield list_obj
     await list_obj.delete()
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_task(sample_list):
     """Create a sample task for testing"""
     task_data = {
@@ -35,11 +33,11 @@ async def sample_task(sample_list):
         "variant": Variant.DEFAULT,
         "position": 0
     }
-    task_obj = await Task.create(**task_data)
+    task_obj = await Task.query.create(**task_data)
     yield task_obj
     await task_obj.delete()
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_shopping_item(sample_list):
     """Create a sample shopping item for testing"""
     item_data = {
@@ -53,7 +51,7 @@ async def sample_shopping_item(sample_list):
         "variant": Variant.DEFAULT,
         "position": 0
     }
-    item_obj = await ShoppingItem.create(**item_data)
+    item_obj = await ShoppingItem.query.create(**item_data)
     yield item_obj
     await item_obj.delete()
 
@@ -159,7 +157,8 @@ class TestTaskEndpoints:
         assert data["title"] == "New Test Task"
         assert data["list_id"] == str(sample_list.id)
 
-    def test_create_task_validation_error(self, test_client, sample_list):
+    @pytest.mark.asyncio
+    async def test_create_task_validation_error(self, test_client, sample_list):
         task_data = {
             "title": "",
             "description": "Test Description"
@@ -197,36 +196,37 @@ class TestTaskEndpoints:
 
     @pytest.mark.asyncio
     async def test_toggle_task_success(self, test_client, sample_list, sample_task):
-        response = test_client.patch(f"/api/lists/{sample_list.id}/tasks/{sample_task.id}/toggle")
+        response = test_client.put(f"/api/lists/{sample_list.id}/tasks/{sample_task.id}/toggle")
         assert response.status_code == 200
         data = response.json()
-        assert data["checked"] is True
+        assert data["checked"] != sample_task.checked  # Should be toggled
 
     @pytest.mark.asyncio
     async def test_reorder_tasks_success(self, test_client, sample_list):
-        task1 = await Task.create(
+        task1 = await Task.query.create(
             id=uuid4(),
             list=sample_list.id,
             title="Task 1",
             position=0
         )
-        task2 = await Task.create(
+        task2 = await Task.query.create(
             id=uuid4(),
             list=sample_list.id,
             title="Task 2",
             position=1
         )
         reorder_data = {
-            "task_ids": [str(task2.id), str(task1.id)]
+            "item_ids": [str(task2.id), str(task1.id)]
         }
         response = test_client.put(f"/api/lists/{sample_list.id}/tasks/reorder", json=reorder_data)
         assert response.status_code == 200
         await task1.delete()
         await task2.delete()
 
-    def test_reorder_tasks_validation_error(self, test_client, sample_list):
+    @pytest.mark.asyncio
+    async def test_reorder_tasks_validation_error(self, test_client, sample_list):
         reorder_data = {
-            "task_ids": []
+            "item_ids": []
         }
         response = test_client.put(f"/api/lists/{sample_list.id}/tasks/reorder", json=reorder_data)
         assert response.status_code == 400
@@ -259,7 +259,8 @@ class TestShoppingItemEndpoints:
         assert data["title"] == "New Test Item"
         assert data["list_id"] == str(sample_list.id)
 
-    def test_create_item_validation_error(self, test_client, sample_list):
+    @pytest.mark.asyncio
+    async def test_create_item_validation_error(self, test_client, sample_list):
         item_data = {
             "title": "",
             "url": "https://example.com"
@@ -285,20 +286,20 @@ class TestShoppingItemEndpoints:
 
     @pytest.mark.asyncio
     async def test_toggle_item_success(self, test_client, sample_list, sample_shopping_item):
-        response = test_client.patch(f"/api/lists/{sample_list.id}/items/{sample_shopping_item.id}/toggle")
+        response = test_client.put(f"/api/lists/{sample_list.id}/items/{sample_shopping_item.id}/toggle")
         assert response.status_code == 200
         data = response.json()
-        assert data["checked"] is True
+        assert data["checked"] != sample_shopping_item.checked  # Should be toggled
 
     @pytest.mark.asyncio
     async def test_reorder_items_success(self, test_client, sample_list):
-        item1 = await ShoppingItem.create(
+        item1 = await ShoppingItem.query.create(
             id=uuid4(),
             list=sample_list.id,
             title="Item 1",
             position=0
         )
-        item2 = await ShoppingItem.create(
+        item2 = await ShoppingItem.query.create(
             id=uuid4(),
             list=sample_list.id,
             title="Item 2",
@@ -323,7 +324,7 @@ class TestSearchEndpoints:
         assert isinstance(data, dict)
         assert "lists" in data
         assert "tasks" in data
-        assert "items" in data
+        assert "shopping_items" in data
 
     def test_search_short_query(self, test_client):
         response = test_client.get("/api/search?q=ab")

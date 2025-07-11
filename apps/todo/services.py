@@ -31,12 +31,12 @@ class ListService:
     
     async def create_list(self, list_data: ListCreate) -> List:
         """Create a new list"""
-        return await List.query.create(**list_data.dict())
+        return await List.query.create(**list_data.model_dump())
     
     async def update_list(self, list_id: UUID, list_data: ListUpdate) -> List:
         """Update a list"""
         list_obj = await self.get_list_by_id(list_id)
-        update_data = {k: v for k, v in list_data.dict().items() if v is not None}
+        update_data = {k: v for k, v in list_data.model_dump().items() if v is not None}
         return await list_obj.update(**update_data)
     
     async def delete_list(self, list_id: UUID) -> bool:
@@ -68,7 +68,7 @@ class TaskService:
         # Get the highest position in the list
         tasks = await Task.query.filter(list=list_id).order_by("-position").limit(1)
         max_position = tasks[0].position if tasks else 0
-        task_data_dict = task_data.dict()
+        task_data_dict = task_data.model_dump()
         task_data_dict["position"] = max_position + 1
         task_data_dict["list"] = list_id
         
@@ -77,7 +77,7 @@ class TaskService:
     async def update_task(self, task_id: UUID, task_data: TaskUpdate, list_id: UUID = None) -> Task:
         """Update a task and ensure the returned object has a valid list reference for serialization."""
         task = await self.get_task_by_id(task_id)
-        update_data = {k: v for k, v in task_data.dict().items() if v is not None}
+        update_data = {k: v for k, v in task_data.model_dump().items() if v is not None}
         updated_task = await task.update(**update_data)
         # Patch: ensure the returned object has a valid list or list_id
         if not getattr(updated_task, 'list', None):
@@ -104,7 +104,19 @@ class TaskService:
         tasks = []
         for position, task_id in enumerate(item_ids, 1):
             task = await self.get_task_by_id(task_id)
-            if task.list != list_id:
+            # Compare the task's list foreign key value with the provided list_id
+            # In Edgy ORM, the ForeignKey 'list' field contains a List object, not just a UUID
+            task_list_obj = getattr(task, 'list', None)
+            
+            # Extract the actual list ID from the List object
+            if hasattr(task_list_obj, 'id'):
+                # If task_list_obj is a List object with an id field
+                actual_list_id = task_list_obj.id
+            else:
+                # If it's already a UUID (shouldn't happen based on Edgy ORM behavior)
+                actual_list_id = task_list_obj
+                
+            if actual_list_id != list_id:
                 raise ValueError("Task does not belong to the specified list")
             updated_task = await task.update(position=position)
             tasks.append(updated_task)
@@ -133,7 +145,7 @@ class ShoppingItemService:
         # Get the highest position in the list
         items = await ShoppingItem.query.filter(list=list_id).order_by("-position").limit(1)
         max_position = items[0].position if items else 0
-        item_data_dict = item_data.dict()
+        item_data_dict = item_data.model_dump()
         item_data_dict["position"] = max_position + 1
         item_data_dict["list"] = list_id
         
@@ -142,7 +154,7 @@ class ShoppingItemService:
     async def update_item(self, item_id: UUID, item_data: ShoppingItemUpdate, list_id: UUID = None) -> ShoppingItem:
         """Update a shopping item and ensure the returned object has a valid list reference for serialization."""
         item = await self.get_item_by_id(item_id)
-        update_data = {k: v for k, v in item_data.dict().items() if v is not None}
+        update_data = {k: v for k, v in item_data.model_dump().items() if v is not None}
         updated_item = await item.update(**update_data)
         # Patch: ensure the returned object has a valid list or list_id
         if not getattr(updated_item, 'list', None):
@@ -168,7 +180,19 @@ class ShoppingItemService:
         items = []
         for position, item_id in enumerate(item_ids, 1):
             item = await self.get_item_by_id(item_id)
-            if item.list != list_id:
+            # Compare the item's list foreign key value with the provided list_id
+            # In Edgy ORM, the ForeignKey 'list' field contains a List object, not just a UUID
+            item_list_obj = getattr(item, 'list', None)
+            
+            # Extract the actual list ID from the List object
+            if hasattr(item_list_obj, 'id'):
+                # If item_list_obj is a List object with an id field
+                actual_list_id = item_list_obj.id
+            else:
+                # If it's already a UUID (shouldn't happen based on Edgy ORM behavior)
+                actual_list_id = item_list_obj
+                
+            if actual_list_id != list_id:
                 raise ValueError("Shopping item does not belong to the specified list")
             updated_item = await item.update(position=position)
             items.append(updated_item)

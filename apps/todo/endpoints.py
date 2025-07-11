@@ -2,25 +2,28 @@
 from typing import List as ListType
 from uuid import UUID
 
-from esmerald import get, post, put, delete
-from esmerald.exceptions import HTTPException, NotFound
-from edgy import Database
+from esmerald import get, post, put, delete, HTTPException, status
+from esmerald.exceptions import NotFound
 from edgy.exceptions import ObjectNotFound
 
-from .models import List, Task, ShoppingItem
+from .models import Task, ShoppingItem
 from .schemas import (
-    ListCreate, ListUpdate, ListResponse, TaskCreate, TaskUpdate, TaskResponse,
+    ListCreate, ListUpdate, ListResponse,
+    TaskCreate, TaskUpdate, TaskResponse,
     ShoppingItemCreate, ShoppingItemUpdate, ShoppingItemResponse,
-    ReorderRequest, SearchResponse, ValidationErrorResponse, NotFoundErrorResponse,
-    AuthErrorResponse, RateLimitErrorResponse
+    ReorderRequest, SearchResponse
 )
 from .services import ListService, TaskService, ShoppingItemService, SearchService
+from db.session import database
+
+# Dependency injection
 from db.session import database
 
 list_service = ListService(database)
 task_service = TaskService(database)
 shopping_item_service = ShoppingItemService(database)
 search_service = SearchService(database)
+
 
 @get(
     path="/api/lists",
@@ -32,18 +35,19 @@ async def get_lists() -> ListType[ListResponse]:
     """
     Retrieve all lists for the authenticated user.
     
-    This endpoint returns all lists owned by the authenticated user.
-    Lists can be filtered by type (task or shopping) and support pagination.
+    This endpoint returns all lists (both task and shopping lists) ordered by
+    creation date (newest first). The response includes basic list information
+    without the nested items for performance.
     
     Returns:
-        List[ListResponse]: Array of list objects with metadata
+        List[ListResponse]: Array of lists with basic information
         
     Raises:
         401: Authentication required - Include valid Authorization header
         429: Rate limit exceeded - Too many requests, retry after delay
     """
     lists = await list_service.get_all_lists()
-    return [ListResponse.from_orm(list_obj) for list_obj in lists]
+    return [ListResponse.model_validate(list_obj) for list_obj in lists]
 
 @post(
     path="/api/lists",
@@ -53,13 +57,14 @@ async def get_lists() -> ListType[ListResponse]:
 )
 async def create_list(data: ListCreate) -> ListResponse:
     """
-    Create a new list for the authenticated user.
+    Create a new todo or shopping list.
     
-    This endpoint creates a new list that can contain either tasks or shopping items.
-    The type field determines the list's purpose and available operations.
+    This endpoint creates a new list with the specified type and properties.
+    The list type determines whether it will contain tasks (for todo lists)
+    or shopping items (for shopping lists).
     
     Args:
-        data: ListCreate schema containing title, type, and optional variant
+        data: ListCreate schema containing list details
         
     Returns:
         ListResponse: The created list with generated ID and timestamps
@@ -71,7 +76,7 @@ async def create_list(data: ListCreate) -> ListResponse:
         429: Rate limit exceeded - Too many requests, retry after delay
     """
     list_obj = await list_service.create_list(data)
-    return ListResponse.from_orm(list_obj)
+    return ListResponse.model_validate(list_obj)
 
 @put(
     path="/api/lists/{list_id:uuid}",
@@ -100,8 +105,11 @@ async def update_list(list_id: UUID, data: ListUpdate) -> ListResponse:
         422: Validation error - Provided fields contain invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    list_obj = await list_service.update_list(list_id, data)
-    return ListResponse.from_orm(list_obj)
+    try:
+        list_obj = await list_service.update_list(list_id, data)
+        return ListResponse.model_validate(list_obj)
+    except ObjectNotFound:
+        raise NotFound("List not found")
 
 @delete(
     path="/api/lists/{list_id:uuid}",
@@ -112,7 +120,7 @@ async def update_list(list_id: UUID, data: ListUpdate) -> ListResponse:
 )
 async def delete_list(list_id: UUID) -> dict:
     """
-    Delete a list and all its contents.
+    Delete a list and all its associated items.
     
     This endpoint permanently deletes a list and all its associated tasks
     or shopping items. This action cannot be undone.
@@ -129,9 +137,14 @@ async def delete_list(list_id: UUID) -> dict:
         404: List not found - List with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    await list_service.delete_list(list_id)
-    return {"message": "List deleted successfully"}
+    try:
+        await list_service.delete_list(list_id)
+        return {"message": "List deleted successfully"}
+    except ObjectNotFound:
+        raise NotFound("List not found")
 
+
+# Task endpoints
 @get(
     path="/api/lists/{list_id:uuid}/tasks",
     tags=["Tasks"],
@@ -149,7 +162,7 @@ async def get_tasks(list_id: UUID) -> ListType[TaskResponse]:
         list_id: UUID of the list containing the tasks
         
     Returns:
-        List[TaskResponse]: Array of task objects
+        List[TaskResponse]: Array of tasks in their current order
         
     Raises:
         400: Bad request - Invalid UUID format
@@ -157,8 +170,13 @@ async def get_tasks(list_id: UUID) -> ListType[TaskResponse]:
         404: List not found - List with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    tasks = await task_service.get_tasks_by_list(list_id)
-    return [TaskResponse.from_orm(task) for task in tasks]
+    try:
+        # Validate that the list exists
+        await list_service.get_list_by_id(list_id)
+        tasks = await task_service.get_tasks_by_list(list_id)
+        return [TaskResponse.model_validate_from_orm(task) for task in tasks]
+    except ObjectNotFound:
+        raise NotFound("List not found")
 
 @post(
     path="/api/lists/{list_id:uuid}/tasks",
@@ -187,8 +205,13 @@ async def create_task(list_id: UUID, data: TaskCreate) -> TaskResponse:
         422: Validation error - Required fields missing or invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    task = await task_service.create_task(list_id, data)
-    return TaskResponse.from_orm(task)
+    try:
+        # Validate that the list exists
+        await list_service.get_list_by_id(list_id)
+        task = await task_service.create_task(list_id, data)
+        return TaskResponse.model_validate_from_orm(task)
+    except ObjectNotFound:
+        raise NotFound("List not found")
 
 @put(
     path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
@@ -218,8 +241,11 @@ async def update_task(list_id: UUID, task_id: UUID, data: TaskUpdate) -> TaskRes
         422: Validation error - Provided fields contain invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    task = await task_service.update_task(task_id, data, list_id=list_id)
-    return TaskResponse.from_orm(task)
+    try:
+        task = await task_service.update_task(task_id, data, list_id=list_id)
+        return TaskResponse.model_validate_from_orm(task)
+    except ObjectNotFound:
+        raise NotFound("Task not found")
 
 @delete(
     path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
@@ -248,8 +274,11 @@ async def delete_task(list_id: UUID, task_id: UUID) -> dict:
         404: List or task not found - List or task with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    await task_service.delete_task(task_id)
-    return {"message": "Task deleted successfully"}
+    try:
+        await task_service.delete_task(task_id)
+        return {"message": "Task deleted successfully"}
+    except ObjectNotFound:
+        raise NotFound("Task not found")
 
 @put(
     path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}/toggle",
@@ -277,8 +306,11 @@ async def toggle_task(list_id: UUID, task_id: UUID) -> TaskResponse:
         404: List or task not found - List or task with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    task = await task_service.toggle_task(task_id)
-    return TaskResponse.from_orm(task)
+    try:
+        task = await task_service.toggle_task(task_id)
+        return TaskResponse.model_validate_from_orm(task)
+    except ObjectNotFound:
+        raise NotFound("Task not found")
 
 @put(
     path="/api/lists/{list_id:uuid}/tasks/reorder",
@@ -307,8 +339,13 @@ async def reorder_tasks(list_id: UUID, data: ReorderRequest) -> ListType[TaskRes
         422: Validation error - Task IDs are invalid or missing
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    tasks = await task_service.reorder_tasks(list_id, data.item_ids)
-    return [TaskResponse.from_orm(task) for task in tasks]
+    try:
+        tasks = await task_service.reorder_tasks(list_id, data.item_ids)
+        return [TaskResponse.model_validate_from_orm(task) for task in tasks]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ObjectNotFound:
+        raise NotFound("List or task not found")
 
 @get(
     path="/api/lists/{list_id:uuid}/items",
@@ -327,7 +364,7 @@ async def get_items(list_id: UUID) -> ListType[ShoppingItemResponse]:
         list_id: UUID of the list containing the shopping items
         
     Returns:
-        List[ShoppingItemResponse]: Array of shopping item objects
+        List[ShoppingItemResponse]: Array of shopping items in their current order
         
     Raises:
         400: Bad request - Invalid UUID format
@@ -335,8 +372,13 @@ async def get_items(list_id: UUID) -> ListType[ShoppingItemResponse]:
         404: List not found - List with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    items = await shopping_item_service.get_items_by_list(list_id)
-    return [ShoppingItemResponse.from_orm(item) for item in items]
+    try:
+        # Validate that the list exists
+        await list_service.get_list_by_id(list_id)
+        items = await shopping_item_service.get_items_by_list(list_id)
+        return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
+    except ObjectNotFound:
+        raise NotFound("List not found")
 
 @post(
     path="/api/lists/{list_id:uuid}/items",
@@ -365,8 +407,13 @@ async def create_item(list_id: UUID, data: ShoppingItemCreate) -> ShoppingItemRe
         422: Validation error - Required fields missing or invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    item = await shopping_item_service.create_item(list_id, data)
-    return ShoppingItemResponse.from_orm(item)
+    try:
+        # Validate that the list exists
+        await list_service.get_list_by_id(list_id)
+        item = await shopping_item_service.create_item(list_id, data)
+        return ShoppingItemResponse.model_validate_from_orm(item)
+    except ObjectNotFound:
+        raise NotFound("List not found")
 
 @put(
     path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
@@ -396,8 +443,11 @@ async def update_item(list_id: UUID, item_id: UUID, data: ShoppingItemUpdate) ->
         422: Validation error - Provided fields contain invalid values
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    item = await shopping_item_service.update_item(item_id, data, list_id=list_id)
-    return ShoppingItemResponse.from_orm(item)
+    try:
+        item = await shopping_item_service.update_item(item_id, data, list_id=list_id)
+        return ShoppingItemResponse.model_validate_from_orm(item)
+    except ObjectNotFound:
+        raise NotFound("Shopping item not found")
 
 @delete(
     path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
@@ -426,8 +476,11 @@ async def delete_item(list_id: UUID, item_id: UUID) -> dict:
         404: List or shopping item not found - List or item with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    await shopping_item_service.delete_item(item_id)
-    return {"message": "Shopping item deleted successfully"}
+    try:
+        await shopping_item_service.delete_item(item_id)
+        return {"message": "Shopping item deleted successfully"}
+    except ObjectNotFound:
+        raise NotFound("Shopping item not found")
 
 @put(
     path="/api/lists/{list_id:uuid}/items/{item_id:uuid}/toggle",
@@ -437,7 +490,7 @@ async def delete_item(list_id: UUID, item_id: UUID) -> dict:
 )
 async def toggle_item(list_id: UUID, item_id: UUID) -> ShoppingItemResponse:
     """
-    Toggle the purchase status of a shopping item.
+    Toggle the completion status of a shopping item.
     
     This endpoint toggles the checked status of a shopping item between true and false.
     This is a convenient way to mark items as purchased or not purchased.
@@ -455,8 +508,11 @@ async def toggle_item(list_id: UUID, item_id: UUID) -> ShoppingItemResponse:
         404: List or shopping item not found - List or item with specified ID does not exist
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    item = await shopping_item_service.toggle_item(item_id)
-    return ShoppingItemResponse.from_orm(item)
+    try:
+        item = await shopping_item_service.toggle_item(item_id)
+        return ShoppingItemResponse.model_validate_from_orm(item)
+    except ObjectNotFound:
+        raise NotFound("Shopping item not found")
 
 @put(
     path="/api/lists/{list_id:uuid}/items/reorder",
@@ -473,7 +529,7 @@ async def reorder_items(list_id: UUID, data: ReorderRequest) -> ListType[Shoppin
     
     Args:
         list_id: UUID of the list containing the shopping items
-        data: ReorderRequest containing array of shopping item IDs in desired order
+        data: ReorderRequest containing array of item IDs in desired order
         
     Returns:
         List[ShoppingItemResponse]: Array of shopping items in their new order
@@ -482,11 +538,16 @@ async def reorder_items(list_id: UUID, data: ReorderRequest) -> ListType[Shoppin
         400: Bad request - Invalid request format or missing required fields
         401: Authentication required - Include valid Authorization header
         404: List not found - List with specified ID does not exist
-        422: Validation error - Shopping item IDs are invalid or missing
+        422: Validation error - Item IDs are invalid or missing
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    items = await shopping_item_service.reorder_items(list_id, data.item_ids)
-    return [ShoppingItemResponse.from_orm(item) for item in items]
+    try:
+        items = await shopping_item_service.reorder_items(list_id, data.item_ids)
+        return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ObjectNotFound:
+        raise NotFound("List or shopping item not found")
 
 @get(
     path="/api/search",
@@ -496,30 +557,31 @@ async def reorder_items(list_id: UUID, data: ReorderRequest) -> ListType[Shoppin
 )
 async def search(q: str) -> SearchResponse:
     """
-    Search across all user content.
+    Search across all lists, tasks, and shopping items.
     
-    This endpoint performs a global search across all lists, tasks, and shopping items
-    owned by the authenticated user. The search is case-insensitive and matches
-    against titles and descriptions.
+    This endpoint performs a full-text search across all user content
+    including lists, tasks, and shopping items. Results are grouped by type.
     
     Args:
-        q: Search query string (minimum 2 characters)
+        q: Search query string (minimum 3 characters)
         
     Returns:
-        SearchResponse: Object containing matching lists, tasks, and shopping items
+        SearchResponse: Search results grouped by content type
         
     Raises:
-        400: Bad request - Query too short (minimum 2 characters) or invalid format
+        400: Bad request - Query too short (minimum 3 characters)
         401: Authentication required - Include valid Authorization header
         429: Rate limit exceeded - Too many requests, retry after delay
     """
+    if len(q.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Search query must be at least 3 characters long")
+    
     results = await search_service.search_all(q)
     return SearchResponse(
-        lists=[ListResponse.from_orm(list_obj) for list_obj in results["lists"]],
-        tasks=[TaskResponse.from_orm(task) for task in results["tasks"]],
-        shopping_items=[ShoppingItemResponse.from_orm(item) for item in results["shopping_items"]]
+        lists=[ListResponse.model_validate(list_obj) for list_obj in results["lists"]],
+        tasks=[TaskResponse.model_validate_from_orm(task) for task in results["tasks"]],
+        shopping_items=[ShoppingItemResponse.model_validate_from_orm(item) for item in results["shopping_items"]]
     )
-
 
 @get(
     path="/api/health",
@@ -531,22 +593,14 @@ async def health_check() -> dict:
     """
     Check the health status of the API service.
     
-    This endpoint provides basic health information about the API service,
-    including database connectivity and service status.
+    This endpoint provides a simple health check to verify that the API
+    service is running and responsive. Used for monitoring and load balancing.
     
     Returns:
         dict: Health status information
-        
-    Raises:
-        503: Service unavailable - Database or other critical services are down
     """
-    # Basic health check - in a real app, you'd check database connectivity, etc.
     return {
         "status": "healthy",
-        "timestamp": "2024-12-01T10:00:00Z",
-        "version": "1.0.0",
-        "services": {
-            "database": "connected",
-            "api": "running"
-        }
+        "message": "Todo API is running",
+        "version": "1.0.0"
     } 
