@@ -12,6 +12,9 @@ from apps.todo.models import List, Task, ShoppingItem
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+pytest_plugins = ["pytest_asyncio"]
+pytestmark = pytest.mark.asyncio
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an instance of the default event loop for the test session"""
@@ -19,7 +22,7 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 async def setup_database():
     """Setup and teardown database for the entire test session"""
     # Connect to database

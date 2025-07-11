@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 import os
 import sys
 
@@ -17,11 +18,12 @@ class Settings(BaseSettings):
     db_user: str = os.getenv("DB_USER", "postgres")
     db_password: str = os.getenv("DB_PASSWORD", "admin")
     db_password_file: str = "/run/secrets/db_password"
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "allow"
+
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "allow"
+    }
     
     @property
     def is_production(self) -> bool:
