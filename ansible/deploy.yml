@@ -651,7 +651,7 @@
       lineinfile:
         path: /etc/postgresql/16/main/postgresql.conf
         regexp: '^#?listen_addresses\s*='
-        line: "listen_addresses = 'localhost'"
+        line: "listen_addresses = '*'"
         backup: yes
       notify: Reload PostgreSQL
       when: not ansible_check_mode
