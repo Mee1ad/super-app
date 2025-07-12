@@ -139,7 +139,7 @@ jobs:
           DEBUG: ${{ secrets.DEBUG }}
         run: |
           echo "🚀 Deploying to production (Ansible will handle database migrations)..."
-          ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -v
+          ansible-playbook -i ansible/inventory.yml ansible/deploy.yml
       - name: Health check
         run: |
           sleep 30
