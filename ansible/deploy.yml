@@ -668,6 +668,18 @@
       when: not ansible_check_mode
       tags: [postgresql, security, authentication]
 
+    - name: Allow Docker bridge subnet to access PostgreSQL
+      become: true
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        line: 'host all all 172.17.0.0/16 md5'
+        state: present
+        create: no
+        backup: yes
+      notify: Reload PostgreSQL
+      when: not ansible_check_mode
+      tags: [postgresql, security, docker-network]
+
     - name: Ensure PostgreSQL only listens on localhost (security)
       become: true
       lineinfile:
