@@ -811,10 +811,12 @@
       copy:
         dest: "{{ app_dir }}/.env"
         content: |
+          ENVIRONMENT=production
           DB_HOST={{ lookup('env', 'DB_HOST', default='172.17.0.1') }}
           DB_PORT={{ lookup('env', 'DB_PORT', default='5432') }}
           DB_NAME={{ lookup('env', 'DB_NAME', default='superapp') }}
           DB_USER={{ lookup('env', 'DB_USER', default='superapp') }}
+          DB_PASSWORD={{ lookup('env', 'DB_PASSWORD', default='admin') }}
           SECRET_KEY={{ lookup('env', 'SECRET_KEY', default='your-secret-key-change-me') }}
           DEBUG={{ lookup('env', 'DEBUG', default='false') }}
         owner: "{{ app_user }}"
@@ -831,13 +833,13 @@
       when: not ansible_check_mode
       tags: [docker, compose, start]
 
-    - name: Run database migrations in api container
-      shell: |
-        cd {{ app_dir }}
-        docker compose exec -T api python db/migrate.py
-      become_user: "{{ app_user }}"
-      when: not ansible_check_mode
-      tags: [app, migrate, db]
+    # - name: Run database migrations in api container
+    #   shell: |
+    #     cd {{ app_dir }}
+    #     docker compose exec -T api python db/migrate.py
+    #   become_user: "{{ app_user }}"
+    #   when: not ansible_check_mode
+    #   tags: [app, migrate, db]
 
     - name: Wait for application to be ready
       uri:

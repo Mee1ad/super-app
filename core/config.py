@@ -55,11 +55,21 @@ class Settings(BaseSettings):
             # Use SQLite file for testing (better for migrations and CI)
             return "sqlite:///./test.db"
         
-        if self.is_production:
-            # Read password from Docker secret if available
-            password = self._read_secret_file(self.db_password_file) or self.db_password
+        # Determine password: environment variable first, then Docker secret file
+        if self.db_password and self.db_password != "admin":  # Check if DB_PASSWORD is set and not default
+            password = self.db_password
+            if self.debug:
+                print(f"Using DB_PASSWORD from environment variable")
+        elif self.is_production:
+            # In production, try Docker secret file as fallback
+            secret_password = self._read_secret_file(self.db_password_file)
+            password = secret_password or self.db_password
+            if self.debug:
+                print(f"Production mode: secret file {'found' if secret_password else 'not found'}, using {'secret' if secret_password else 'fallback'}")
         else:
             password = self.db_password
+            if self.debug:
+                print(f"Development mode: using DB_PASSWORD from environment")
             
         return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
