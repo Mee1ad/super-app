@@ -410,6 +410,8 @@
       ignore_errors: no
       tags: [secrets, db_password]
 
+
+
     - name: Check if application directory exists
       stat:
         path: "{{ app_dir }}"

@@ -7,8 +7,6 @@ services:
       - "8000:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    secrets:
-      - db_password
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DB_HOST=${DB_HOST}
@@ -16,7 +14,6 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_PASSWORD_FILE=/run/secrets/db_password
       - DEBUG=${DEBUG:-false}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
@@ -26,10 +23,6 @@ services:
       start_period: 40s
     networks:
       - app-network
-
-secrets:
-  db_password:
-    file: ./secrets/db_password
 
 networks:
   app-network:
