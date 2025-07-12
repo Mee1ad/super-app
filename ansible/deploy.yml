@@ -687,11 +687,12 @@
       when: not ansible_check_mode
       tags: [postgresql, service]
 
-    - name: Ensure PostgreSQL port is NOT exposed in firewall (security)
+    - name: Allow Docker containers to reach PostgreSQL
       ufw:
-        rule: deny
-        port: '5432'
+        rule: allow
         proto: tcp
+        port: '5432'
+        src: 172.17.0.0/16   # default docker0 subnet
       when: not ansible_check_mode
       tags: [postgresql, security, firewall]
 
