@@ -744,31 +744,48 @@
       when: db_password_file.stat.exists and not ansible_check_mode
       tags: [database, secrets]
 
+    - name: Create application database
+      become_user: postgres
+      postgresql_db:
+        name: "{{ lookup('env', 'DB_NAME', default='superapp') }}"
+        state: present
+      when: not ansible_check_mode
+      tags: [database, postgresql, database-creation]
+
     - name: Set superapp user password from secret if available
       become_user: postgres
       postgresql_user:
-        name: superapp
+        name: "{{ lookup('env', 'DB_USER', default='superapp') }}"
         password: "{{ db_password_content.content | b64decode | default('superapp123', true) }}"
         state: present
       when: db_password_file.stat.exists and not ansible_check_mode
       tags: [database, postgresql, users]
 
+    - name: Create superapp user if not exists
+      become_user: postgres
+      postgresql_user:
+        name: "{{ lookup('env', 'DB_USER', default='superapp') }}"
+        password: "{{ lookup('env', 'DB_PASSWORD', default='superapp123') }}"
+        state: present
+      when: not db_password_file.stat.exists and not ansible_check_mode
+      tags: [database, postgresql, users, default]
+
     - name: Set superapp user password in PostgreSQL
       become_user: postgres
       shell: |
-        psql -U postgres -c "ALTER USER superapp WITH PASSWORD '{{ db_password_content.content | b64decode | default('superapp123', true) if db_password_file.stat.exists else 'superapp123' }}';"
+        psql -U postgres -c "ALTER USER {{ lookup('env', 'DB_USER', default='superapp') }} WITH PASSWORD '{{ db_password_content.content | b64decode | default('superapp123', true) if db_password_file.stat.exists else 'superapp123' }}';"
       when: not ansible_check_mode
       tags: [database, postgresql, users, password-update]
 
     - name: Grant all privileges on database to user
       become_user: postgres
       postgresql_privs:
-        role: superapp
+        db: "{{ lookup('env', 'DB_NAME', default='superapp') }}"
+        role: "{{ lookup('env', 'DB_USER', default='superapp') }}"
         type: database
         privs: ALL
         state: present
-        login_db: postgres
-      when: (db_password_file.stat.exists or not db_password_file.stat.exists) and not ansible_check_mode
+      when: not ansible_check_mode
       tags: [database, postgresql, permissions]
 
     - name: Skip database operations in check mode
@@ -786,24 +803,34 @@
       when: not ansible_check_mode
       tags: [docker, compose, stop]
 
+    - name: Create .env file for docker compose
+      copy:
+        dest: "{{ app_dir }}/.env"
+        content: |
+          DB_HOST={{ lookup('env', 'DB_HOST', default='localhost') }}
+          DB_PORT={{ lookup('env', 'DB_PORT', default='5432') }}
+          DB_NAME={{ lookup('env', 'DB_NAME', default='superapp') }}
+          DB_USER={{ lookup('env', 'DB_USER', default='superapp') }}
+          SECRET_KEY={{ lookup('env', 'SECRET_KEY', default='your-secret-key-change-me') }}
+          DEBUG={{ lookup('env', 'DEBUG', default='false') }}
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0600'
+      when: not ansible_check_mode
+      tags: [docker, compose, env]
+
     - name: Start application with docker compose
       shell: |
         cd {{ app_dir }}
-        DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" DB_USER="$DB_USER" SECRET_KEY="$SECRET_KEY" DEBUG="$DEBUG" docker compose up -d
+        docker compose up -d
       become_user: "{{ app_user }}"
-      environment:
-        DB_HOST: "{{ lookup('env', 'DB_HOST', default='localhost') }}"
-        DB_PORT: "{{ lookup('env', 'DB_PORT', default='5432') }}"
-        DB_NAME: "{{ lookup('env', 'DB_NAME', default='superapp') }}"
-        DB_USER: "{{ lookup('env', 'DB_USER', default='postgres') }}"
-        SECRET_KEY: "{{ lookup('env', 'SECRET_KEY', default='your-secret-key') }}"
       when: not ansible_check_mode
       tags: [docker, compose, start]
 
-    - name: Run database migrations in backend container
+    - name: Run database migrations in api container
       shell: |
         cd {{ app_dir }}
-        docker compose exec -T backend python db/migrate.py
+        docker compose exec -T api python db/migrate.py
       become_user: "{{ app_user }}"
       when: not ansible_check_mode
       tags: [app, migrate, db]
