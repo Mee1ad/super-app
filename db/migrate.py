@@ -192,7 +192,21 @@ async def verify_database():
 async def main():
     """Main migration function"""
     logger.info("🚀 Starting database migration process...")
-    print(f"Database URL 😫: {settings.get_database_url()}")
+    
+    # Debug configuration details
+    print("=== Database Configuration Debug ===")
+    print(f"Environment: {settings.environment}")
+    print(f"Is Production: {settings.is_production}")
+    print(f"DB Host: {settings.db_host}")
+    print(f"DB Port: {settings.db_port}")
+    print(f"DB Name: {settings.db_name}")
+    print(f"DB User: {settings.db_user}")
+    print(f"DB Password Length: {len(settings.db_password) if settings.db_password else 0}")
+    print(f"DB Password First Char: {settings.db_password[0] if settings.db_password else 'None'}")
+    print(f"DB Password Last Char: {settings.db_password[-1] if settings.db_password and len(settings.db_password) > 0 else 'None'}")
+    print(f"Database URL: {settings.get_database_url()}")
+    print("=== End Debug ===")
+    
     try:
         await database.connect()
 
