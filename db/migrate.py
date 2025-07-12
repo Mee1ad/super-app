@@ -29,7 +29,6 @@ async def check_database_connection():
     """Test database connection"""
     try:
         logger.info(f"Connecting to database: {settings.get_database_url()}")
-        await database.connect()
         
         # Test connection with a simple query
         if settings.is_testing:
@@ -45,14 +44,11 @@ async def check_database_connection():
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
         return False
-    finally:
-        await database.disconnect()
 
 async def create_tables():
     """Create all database tables"""
     try:
         logger.info("🔄 Creating database tables...")
-        await database.connect()
         
         # Import models to ensure they are registered
         from apps.todo.models import List, Task, ShoppingItem
@@ -82,14 +78,11 @@ async def create_tables():
     except Exception as e:
         logger.error(f"❌ Error creating tables: {e}")
         return False
-    finally:
-        await database.disconnect()
 
 async def run_migrations():
     """Run database migrations"""
     try:
         logger.info("🔄 Running database migrations...")
-        await database.connect()
         
         # Create migrations table if it doesn't exist
         migration_table_sql = """
@@ -145,8 +138,6 @@ async def run_migrations():
     except Exception as e:
         logger.error(f"❌ Error running migrations: {e}")
         return False
-    finally:
-        await database.disconnect()
 
 async def apply_migration(migration_name):
     """Apply a specific migration"""
@@ -162,7 +153,6 @@ async def verify_database():
     """Verify database is properly set up"""
     try:
         logger.info("🔍 Verifying database setup...")
-        await database.connect()
         
         # Check if required tables exist
         required_tables = ['lists', 'tasks', 'shopping_items']
@@ -198,34 +188,32 @@ async def verify_database():
     except Exception as e:
         logger.error(f"❌ Database verification failed: {e}")
         return False
-    finally:
-        await database.disconnect()
 
 async def main():
     """Main migration function"""
     logger.info("🚀 Starting database migration process...")
-    
-    # Check database connection
-    if not await check_database_connection():
-        logger.error("❌ Cannot proceed without database connection")
-        sys.exit(1)
-    
-    # Create tables
-    if not await create_tables():
-        logger.error("❌ Failed to create tables")
-        sys.exit(1)
-    
-    # Run migrations
-    if not await run_migrations():
-        logger.error("❌ Failed to run migrations")
-        sys.exit(1)
-    
-    # Verify database
-    if not await verify_database():
-        logger.error("❌ Database verification failed")
-        sys.exit(1)
-    
-    logger.info("🎉 Database migration completed successfully!")
+    try:
+        await database.connect()
+
+        if not await check_database_connection():
+            logger.error("❌ Cannot proceed without database connection")
+            sys.exit(1)
+
+        if not await create_tables():
+            logger.error("❌ Failed to create tables")
+            sys.exit(1)
+
+        if not await run_migrations():
+            logger.error("❌ Failed to run migrations")
+            sys.exit(1)
+
+        if not await verify_database():
+            logger.error("❌ Database verification failed")
+            sys.exit(1)
+
+        logger.info("🎉 Database migration completed successfully!")
+    finally:
+        await database.disconnect()
 
 if __name__ == "__main__":
     asyncio.run(main()) 
