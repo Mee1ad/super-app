@@ -807,7 +807,7 @@
       copy:
         dest: "{{ app_dir }}/.env"
         content: |
-          DB_HOST={{ lookup('env', 'DB_HOST', default='localhost') }}
+          DB_HOST={{ lookup('env', 'DB_HOST', default='host.docker.internal') }}
           DB_PORT={{ lookup('env', 'DB_PORT', default='5432') }}
           DB_NAME={{ lookup('env', 'DB_NAME', default='superapp') }}
           DB_USER={{ lookup('env', 'DB_USER', default='superapp') }}
