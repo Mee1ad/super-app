@@ -680,16 +680,7 @@
       when: not ansible_check_mode
       tags: [postgresql, security, docker-network]
 
-    - name: Ensure PostgreSQL only listens on localhost (security)
-      become: true
-      lineinfile:
-        path: /etc/postgresql/16/main/pg_hba.conf
-        regexp: '^host\s+all\s+all\s+0\.0\.0\.0/0'
-        state: absent
-        backup: yes
-      notify: Reload PostgreSQL
-      when: not ansible_check_mode
-      tags: [postgresql, security, firewall]
+    # Removed localhost-only enforcement to allow Docker access
 
     - name: Reload PostgreSQL configuration
       become: true
