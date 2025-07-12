@@ -192,6 +192,7 @@ async def verify_database():
 async def main():
     """Main migration function"""
     logger.info("🚀 Starting database migration process...")
+    print(f"Database URL 😫: {settings.get_database_url()}")
     try:
         await database.connect()
 

@@ -4,7 +4,6 @@ from core.config import settings
 
 # Create database instance with environment-aware configuration
 database = Database(settings.get_database_url())
-print(f"Database URL: {settings.get_database_url()}")
 
 # Create a shared registry instance
 models_registry = Registry(database=database)
