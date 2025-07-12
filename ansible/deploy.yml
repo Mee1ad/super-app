@@ -672,7 +672,7 @@
       become: true
       lineinfile:
         path: /etc/postgresql/16/main/pg_hba.conf
-        line: 'host all all 172.17.0.0/16 md5'
+        line: 'host all all 172.16.0.0/12 md5'
         state: present
         create: no
         backup: yes
@@ -704,7 +704,7 @@
         rule: allow
         proto: tcp
         port: '5432'
-        src: 172.17.0.0/16   # default docker0 subnet
+        src: 172.16.0.0/12   # all default Docker bridge subnets
       when: not ansible_check_mode
       tags: [postgresql, security, firewall]
 
@@ -820,7 +820,7 @@
       copy:
         dest: "{{ app_dir }}/.env"
         content: |
-          DB_HOST={{ lookup('env', 'DB_HOST', default='host.docker.internal') }}
+          DB_HOST={{ lookup('env', 'DB_HOST', default='172.17.0.1') }}
           DB_PORT={{ lookup('env', 'DB_PORT', default='5432') }}
           DB_NAME={{ lookup('env', 'DB_NAME', default='superapp') }}
           DB_USER={{ lookup('env', 'DB_USER', default='superapp') }}
