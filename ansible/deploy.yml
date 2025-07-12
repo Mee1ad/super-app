@@ -3,8 +3,8 @@
   hosts: production
   become: yes
   vars:
-    app_user: "superapp"
-    app_group: "superapp"
+    app_user: "postgres"
+    app_group: "postgres"
     docker_compose_version: "2.20.0"
     secrets_dir: "/run/secrets"
     local_secrets_dir: "../secrets"
@@ -753,41 +753,41 @@
     - name: Create application database
       become_user: postgres
       postgresql_db:
-        name: "{{ lookup('env', 'DB_NAME', default='superapp') }}"
+        name: "{{ lookup('env', 'DB_NAME', default='postgres') }}"
         state: present
       when: not ansible_check_mode
       tags: [database, postgresql, database-creation]
 
-    - name: Set superapp user password from secret if available
+    - name: Set postgres user password from secret if available
       become_user: postgres
       postgresql_user:
-        name: "{{ lookup('env', 'DB_USER', default='superapp') }}"
-        password: "{{ db_password_content.content | b64decode | default('superapp123', true) }}"
+        name: "{{ lookup('env', 'DB_USER', default='postgres') }}"
+        password: "{{ db_password_content.content | b64decode | default('admin', true) }}"
         state: present
       when: db_password_file.stat.exists and not ansible_check_mode
       tags: [database, postgresql, users]
 
-    - name: Create superapp user if not exists
+    - name: Create postgres user if not exists
       become_user: postgres
       postgresql_user:
-        name: "{{ lookup('env', 'DB_USER', default='superapp') }}"
-        password: "{{ lookup('env', 'DB_PASSWORD', default='superapp123') }}"
+        name: "{{ lookup('env', 'DB_USER', default='postgres') }}"
+        password: "{{ lookup('env', 'DB_PASSWORD', default='admin') }}"
         state: present
       when: not db_password_file.stat.exists and not ansible_check_mode
       tags: [database, postgresql, users, default]
 
-    - name: Set superapp user password in PostgreSQL
+    - name: Set postgres user password in PostgreSQL
       become_user: postgres
       shell: |
-        psql -U postgres -c "ALTER USER {{ lookup('env', 'DB_USER', default='superapp') }} WITH PASSWORD '{{ db_password_content.content | b64decode | default('superapp123', true) if db_password_file.stat.exists else 'superapp123' }}';"
+        psql -U postgres -c "ALTER USER {{ lookup('env', 'DB_USER', default='postgres') }} WITH PASSWORD '{{ db_password_content.content | b64decode | default('admin', true) if db_password_file.stat.exists else 'admin' }}';"
       when: not ansible_check_mode
       tags: [database, postgresql, users, password-update]
 
     - name: Grant all privileges on database to user
       become_user: postgres
       postgresql_privs:
-        db: "{{ lookup('env', 'DB_NAME', default='superapp') }}"
-        role: "{{ lookup('env', 'DB_USER', default='superapp') }}"
+        db: "{{ lookup('env', 'DB_NAME', default='postgres') }}"
+        role: "{{ lookup('env', 'DB_USER', default='postgres') }}"
         type: database
         privs: ALL
         state: present
@@ -816,8 +816,8 @@
           ENVIRONMENT=production
           DB_HOST={{ lookup('env', 'DB_HOST', default='172.17.0.1') }}
           DB_PORT={{ lookup('env', 'DB_PORT', default='5432') }}
-          DB_NAME={{ lookup('env', 'DB_NAME', default='superapp') }}
-          DB_USER={{ lookup('env', 'DB_USER', default='superapp') }}
+          DB_NAME={{ lookup('env', 'DB_NAME', default='postgres') }}
+          DB_USER={{ lookup('env', 'DB_USER', default='postgres') }}
           DB_PASSWORD={{ lookup('env', 'DB_PASSWORD', default='admin') }}
           SECRET_KEY={{ lookup('env', 'SECRET_KEY', default='your-secret-key-change-me') }}
           DEBUG={{ lookup('env', 'DEBUG', default='false') }}
@@ -985,9 +985,9 @@
       when: ansible_check_mode
       tags: [firewall, check-mode]
 
-    - name: Test SSH access to superapp user
+    - name: Test SSH access to postgres user
       shell: |
-        timeout 10 ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 superapp@localhost "echo 'SSH access to superapp user is working!'" || echo "SSH test timed out or failed"
+        timeout 10 ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 postgres@localhost "echo 'SSH access to postgres user is working!'" || echo "SSH test timed out or failed"
       register: ssh_test_result
       ignore_errors: yes
       when: not ansible_check_mode

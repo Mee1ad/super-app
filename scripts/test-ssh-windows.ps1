@@ -3,7 +3,7 @@
 
 param(
     [string]$ServerIP = "65.108.157.187",
-    [string]$SSHUser = "superapp",
+    [string]$SSHUser = "postgres",
     [string]$SSHKey = "~/.ssh/super-app-backend"
 )
 
@@ -82,5 +82,5 @@ Write-Host "🎉 SSH setup is ready for tunneling!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "1. Run: .\scripts\secure-db-access.ps1" -ForegroundColor Gray
-Write-Host "2. In another terminal: psql -h localhost -p 5432 -U superapp -d superapp" -ForegroundColor Gray
+Write-Host "2. In another terminal: psql -h localhost -p 5432 -U postgres -d postgres" -ForegroundColor Gray
 Write-Host "3. Or use DBeaver/pgAdmin with SSH tunneling" -ForegroundColor Gray 

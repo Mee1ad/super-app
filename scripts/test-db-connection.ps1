@@ -3,9 +3,9 @@
 
 param(
     [string]$ServerIP = "65.108.157.187",
-    [string]$Database = "superapp",
-    [string]$Username = "superapp",
-    [string]$Password = "superapp123",
+    [string]$Database = "postgres",
+[string]$Username = "postgres",
+[string]$Password = "admin",
     [int]$Port = 5432
 )
 

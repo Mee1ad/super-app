@@ -119,9 +119,8 @@ docker logs super-app-api
 curl http://localhost:8000/ping
 
 # SSH into server
-ssh -i ./secrets/id_rsa superapp@YOUR_SERVER_IP
-```
-"""
+ssh -i ./secrets/id_rsa postgres@YOUR_SERVER_IP
+```"""
 )
 def deployment_info() -> dict:
     """Deployment and operations documentation endpoint."""
@@ -269,7 +268,7 @@ docker logs super-app-api
 curl http://localhost:8000/ping
 
 # SSH into server
-ssh -i ./secrets/id_rsa superapp@YOUR_SERVER_IP
+ssh -i ./secrets/id_rsa postgres@YOUR_SERVER_IP
 ```""",
 )
 

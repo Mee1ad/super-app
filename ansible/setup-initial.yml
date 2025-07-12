@@ -3,8 +3,8 @@
   hosts: production
   become: yes
   vars:
-    app_user: "superapp"
-    app_group: "superapp"
+    app_user: "postgres"
+    app_group: "postgres"
     docker_compose_version: "2.20.0"
     app_dir: "/opt/super-app"
     docker_image: "ghcr.io/{{ github_repository | default('your-username/super-app-backend') }}:latest"

@@ -3,7 +3,7 @@
 
 param(
     [string]$ServerIP = "65.108.157.187",
-    [string]$SSHUser = "superapp",
+    [string]$SSHUser = "postgres",
     [string]$SSHKey = "~/.ssh/super-app-backend",
     [int]$LocalPort = 5432,
     [int]$RemotePort = 5432

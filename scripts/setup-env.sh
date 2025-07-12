@@ -64,7 +64,7 @@ ENVIRONMENT=development
 # Database Configuration
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=superapp
+DB_NAME=postgres
 DB_USER=postgres
 DB_PASSWORD=admin
 
@@ -85,7 +85,7 @@ EOF
     export ENVIRONMENT="development"
     export DB_HOST="localhost"
     export DB_PORT="5432"
-    export DB_NAME="superapp"
+    export DB_NAME="postgres"
     export DB_USER="postgres"
     export DB_PASSWORD="admin"
     export DEBUG="true"
@@ -158,7 +158,7 @@ validate_environment() {
     if command -v psql &> /dev/null; then
         print_status "Testing database connection..."
         # Build database URL from components
-        DB_URL="postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-admin}@${DB_HOST:-localhost}:${DB_PORT:-5432}/${DB_NAME:-superapp}"
+        DB_URL="postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-admin}@${DB_HOST:-localhost}:${DB_PORT:-5432}/${DB_NAME:-postgres}"
         
         # Simple connection test (this is a basic test)
         if echo "SELECT 1;" | psql "$DB_URL" > /dev/null 2>&1; then

@@ -40,7 +40,7 @@ ENVIRONMENT=development
 # Database Configuration
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=superapp
+DB_NAME=postgres
 DB_USER=postgres
 DB_PASSWORD=admin
 
@@ -61,7 +61,7 @@ DEBUG=true
     $env:ENVIRONMENT = "development"
     $env:DB_HOST = "localhost"
     $env:DB_PORT = "5432"
-    $env:DB_NAME = "superapp"
+    $env:DB_NAME = "postgres"
     $env:DB_USER = "postgres"
     $env:DB_PASSWORD = "admin"
     $env:DEBUG = "true"

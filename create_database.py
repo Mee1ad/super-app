@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to create the superapp database
+Script to create the postgres database
 """
 import asyncio
 import sys
@@ -13,7 +13,7 @@ from core.config import settings
 import databases
 
 async def create_database():
-    """Create the superapp database if it doesn't exist"""
+    """Create the postgres database if it doesn't exist"""
     # Connect to the default postgres database
     postgres_url = f"postgresql://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/postgres"
     
@@ -22,17 +22,17 @@ async def create_database():
         database = databases.Database(postgres_url)
         await database.connect()
         
-        # Check if superapp database exists
+        # Check if postgres database exists
         result = await database.fetch_one(
-            "SELECT 1 FROM pg_database WHERE datname = 'superapp'"
+            "SELECT 1 FROM pg_database WHERE datname = 'postgres'"
         )
         
         if result:
-            print("✅ Database 'superapp' already exists")
+            print("✅ Database 'postgres' already exists")
         else:
             # Create the database
-            await database.execute("CREATE DATABASE superapp")
-            print("✅ Database 'superapp' created successfully")
+            await database.execute("CREATE DATABASE postgres")
+            print("✅ Database 'postgres' created successfully")
         
         await database.disconnect()
         return True
