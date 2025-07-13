@@ -72,18 +72,3 @@ jobs:
       - name: Health check
         run: |
           curl --fail http://${{ secrets.SERVER_IP }}/ping
-
-      - name: Create Git tag
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.CR_PAT }}@github.com/Mee1ad/super-app.git
-          git tag "v${{ github.run_number }}"
-          git push origin --tags
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: "v${{ github.run_number }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.CR_PAT }}
