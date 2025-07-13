@@ -119,12 +119,13 @@
         update_cache: yes
       tags: [packages, postgres]
 
-    - name: Set PostgreSQL password
+    - name: Change postgres password if it's different
+      become: true
       become_user: postgres
-      postgresql_user:
-        name: postgres
-        password: "{{ postgres_password }}"
-      tags: [postgres, db]
+      shell: |
+        psql -tAc "SELECT 1 FROM pg_authid WHERE rolname='postgres' AND rolpassword = crypt('{{ postgres_password }}', rolpassword);" | grep -q 1 \
+        || psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_password }}';"
+      tags: [ postgres, db ]
 
     - name: Configure PostgreSQL to listen on all addresses
       lineinfile:
@@ -187,6 +188,12 @@
       args:
         chdir: "{{ backend_dir }}"
       tags: [app, docker]
+
+    - name: Run initial DB migrations
+      shell: docker compose exec api python db/migrate.py
+      args:
+        chdir: "{{ backend_dir }}"
+      tags: [ app, db, migrate ]
 
     - name: Disable default nginx site
       file:
