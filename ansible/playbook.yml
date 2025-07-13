@@ -172,6 +172,11 @@
         version: main
       tags: [app, code]
 
+    - name: Fix Git security feature - add safe directory
+      shell: git config --global --add safe.directory {{ backend_dir }}
+      become_user: "{{ os_user }}"
+      tags: [app, code, git]
+
     - name: Generate secret key if not exists
       command: "openssl rand -base64 48"
       register: generated_key
@@ -199,6 +204,14 @@
       args:
         chdir: "{{ backend_dir }}"
       tags: [app, docker]
+
+    - name: Set proper ownership for future Git operations
+      file:
+        path: "{{ backend_dir }}"
+        owner: "{{ os_user }}"
+        group: "{{ os_user }}"
+        recurse: yes
+      tags: [app, code, git]
 
     - name: Run initial DB migrations
       shell: docker compose exec api python db/migrate.py
