@@ -1,19 +1,14 @@
 services:
   api:
-    image: super-app-backend
+    build:
+      context: .
     container_name: super-app-api
     restart: unless-stopped
     # network_mode replaces networks and ports
     network_mode: host
     # remove port mapping and extra_hosts
-    environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DEBUG=${DEBUG:-false}
+    env_file:
+      - .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
       interval: 30s

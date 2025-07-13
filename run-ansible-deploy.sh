@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# wsl bash run-ansible-deploy.sh
+# wsl bash run-ansible-old-deploy.sh
 
 # Check if running in Linux/WSL
 if [[ "$(uname -s)" != "Linux" ]]; then

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# bash run-ansible-initial-setup.sh
+# bash run-ansible-old-initial-setup.sh
 
 # Check if running in Linux/WSL
 if [[ "$(uname -s)" != "Linux" ]]; then

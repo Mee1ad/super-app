@@ -37,13 +37,13 @@ export SSH_KEY_FILE="~/.ssh/your-key"
 ### Production Deployment
 ```bash
 # Uses production group by default
-ansible-playbook -i ansible/inventory.yml ansible/deploy.yml
+ansible-old-playbook -i ansible-old/inventory.yml ansible-old/deploy.yml
 ```
 
 ### Initial Server Setup
 ```bash
 # Use root user for initial setup
-ansible-playbook -i ansible/inventory.yml --limit initial_setup ansible/deploy.yml
+ansible-old-playbook -i ansible-old/inventory.yml --limit initial_setup ansible-old/deploy.yml
 ```
 
 ### GitHub Actions
@@ -53,5 +53,5 @@ export SERVER_IP="${{ secrets.SERVER_IP }}"
 export ANSIBLE_USER="superapp"
 export SSH_KEY_FILE="~/.ssh/deploy_key"
 
-ansible-playbook -i ansible/inventory.yml ansible/deploy.yml
+ansible-old-playbook -i ansible-old/inventory.yml ansible-old/deploy.yml
 ``` 

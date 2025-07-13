@@ -67,7 +67,7 @@ export SSH_KEY_PATH="./secrets/id_rsa"
 export GITHUB_REPOSITORY="your-username/super-app-backend"
 
 # Run the Ansible playbook
-ansible-playbook -i ansible/inventory.yml ansible/deploy.yml
+ansible-old-playbook -i ansible-old/inventory.yml ansible-old/deploy.yml
 ```
 
 ## What the Deployment Does

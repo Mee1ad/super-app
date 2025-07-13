@@ -1,0 +1,273 @@
+- hosts: web
+  become: true
+  vars_files:
+    - group_vars/all.yml
+    - group_vars/vault.yml
+  tasks:
+
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+      tags: [system, update]
+
+    - name: Create a new sudo user
+      user:
+        name: "{{ os_user }}"
+        groups: sudo
+        shell: /bin/bash
+        state: present
+        create_home: yes
+      tags: [user]
+
+    - name: Copy SSH public key to new user
+      authorized_key:
+        user: "{{ os_user }}"
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/super-app-backend.pub') }}"
+      tags: [user, ssh]
+
+    - name: Allow sudo without password
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^{{ os_user }}'
+        line: '{{ os_user }} ALL=(ALL) NOPASSWD:ALL'
+      tags: [user]
+
+#    - name: Harden SSH - disable root login
+#      lineinfile:
+#        path: /etc/ssh/sshd_config
+#        regexp: '^#?PermitRootLogin'
+#        line: 'PermitRootLogin no'
+#      tags: [security, ssh]
+
+    - name: Harden SSH - disable password auth
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+      tags: [security, ssh]
+
+    - name: Restrict SSH access to new user
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?AllowUsers'
+        line: 'AllowUsers {{ os_user }}'
+      tags: [security, ssh]
+
+    - name: Restart SSH service
+      service:
+        name: ssh
+        state: restarted
+      tags: [ssh]
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      tags: [packages, docker]
+
+    - name: Add Docker APT repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+      tags: [packages, docker]
+
+    - name: Update APT cache
+      apt:
+        update_cache: yes
+      tags: [packages, docker]
+
+    - name: Install required packages
+      apt:
+        name:
+          - ufw
+          - nginx
+          - git
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+          - fail2ban
+          - logrotate
+        state: present
+        update_cache: yes
+      tags: [packages, docker, nginx, postgres]
+
+    - name: Add PostgreSQL APT repository key
+      apt_key:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        state: present
+      tags: [packages, postgres]
+
+    - name: Add PostgreSQL 16 repository
+      apt_repository:
+        repo: "deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+        state: present
+        filename: 'pgdg'
+      tags: [packages, postgres]
+
+    - name: Install PostgreSQL 16
+      apt:
+        name:
+          - postgresql-16
+          - postgresql-client-16
+          - python3-psycopg2
+        state: present
+        update_cache: yes
+      tags: [packages, postgres]
+
+    - name: Set PostgreSQL password
+      become_user: postgres
+      postgresql_user:
+        name: postgres
+        password: "{{ postgres_password }}"
+      tags: [postgres, db]
+
+    - name: Configure PostgreSQL to listen on all addresses
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        regexp: '^#?listen_addresses'
+        line: "listen_addresses = '*'"
+      tags: [postgres, db]
+
+    - name: Allow local network access in pg_hba.conf
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        insertafter: '^# IPv4 local connections:'
+        line: "host    all             all             0.0.0.0/0               md5"
+      tags: [postgres, db]
+
+    - name: Restart PostgreSQL
+      service:
+        name: postgresql
+        state: restarted
+      tags: [postgres, db]
+
+    - name: Enable Docker service
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+      tags: [docker]
+
+    - name: Clone Esmerald project
+      git:
+        repo: "{{ backend_repo }}"
+        dest: "{{ backend_dir }}"
+        version: main
+      tags: [app, code]
+
+    - name: Generate secret key if not exists
+      command: "openssl rand -base64 48"
+      register: generated_key
+      changed_when: false
+      when: secret_key is not defined
+      tags: [env, update]
+
+    - name: Set secret_key from generated key
+      set_fact:
+        secret_key: "{{ generated_key.stdout }}"
+      when: secret_key is not defined
+      tags: [env, update]
+
+    - name: Render .env from template
+      template:
+        src: files/env.production.j2
+        dest: "{{ backend_dir }}/.env"
+        owner: "{{ os_user }}"
+        group: "{{ os_user }}"
+        mode: '0600'
+      tags: [env, update]
+
+    - name: Build and start containers
+      shell: docker compose up -d --build
+      args:
+        chdir: "{{ backend_dir }}"
+      tags: [app, docker]
+
+    - name: Disable default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      tags: [nginx]
+
+    - name: Add Esmerald nginx config
+      copy:
+        dest: /etc/nginx/sites-available/backend
+        content: |
+          server {
+              listen 80 default_server;
+              location / {
+                  proxy_pass http://localhost:8000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              }
+          }
+      tags: [nginx]
+
+    - name: Enable Esmerald site
+      file:
+        src: /etc/nginx/sites-available/backend
+        dest: /etc/nginx/sites-enabled/backend
+        state: link
+      tags: [nginx]
+
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
+      tags: [nginx]
+
+    - name: Enable UFW firewall
+      ufw:
+        state: enabled
+        policy: deny
+      tags: [security, ufw]
+
+    - name: Allow SSH, HTTP and HTTPS
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+      loop:
+        - 22
+        - 80
+        - 443
+      tags: [security, ufw]
+
+    - name: Setup daily PostgreSQL backup script
+      copy:
+        dest: /usr/local/bin/pg_backup.sh
+        mode: '0750'
+        content: |
+          #!/bin/bash
+          BACKUP_DIR="/var/backups/postgresql"
+          mkdir -p "$BACKUP_DIR"
+          pg_dumpall -U postgres | gzip > "$BACKUP_DIR/all_$(date +%F).sql.gz"
+      tags: [postgres, backup]
+
+    - name: Setup cron job for backup
+      cron:
+        name: "Daily PostgreSQL backup"
+        job: "/usr/local/bin/pg_backup.sh"
+        user: postgres
+        hour: 2
+        minute: 0
+      tags: [postgres, backup]
+
+    - name: Configure logrotate for Docker logs
+      copy:
+        dest: /etc/logrotate.d/docker-containers
+        content: |
+          /var/lib/docker/containers/*/*.log {
+              rotate 7
+              daily
+              compress
+              missingok
+              delaycompress
+              copytruncate
+          }
+      tags: [docker, logrotate]

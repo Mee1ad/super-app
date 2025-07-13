@@ -60,7 +60,7 @@ docker-compose.yml
 .dockerignore
 
 # Ansible
-ansible/
+ansible-old/
 *.yml
 *.yaml
 

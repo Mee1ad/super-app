@@ -20,7 +20,7 @@ To enable remote database access, you need to deploy the updated Ansible configu
 
 ```bash
 # Run the deployment to enable remote access
-.\scripts\run-ansible-deploy.ps1
+.\scripts\run-ansible-old-deploy.ps1
 ```
 
 This will:

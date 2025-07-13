@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     debug: bool = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes", "on")
     
     # Security
-    secret_key: str = "your-secret-key"
+    secret_key: str = os.getenv("SECRET_KEY", "localhost")
     
     # Database Configuration (all from env)
     db_host: str = os.getenv("DB_HOST", "localhost")
@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     db_name: str = os.getenv("DB_NAME", "postgres")
     db_user: str = os.getenv("DB_USER", "postgres")
     db_password: str = os.getenv("DB_PASSWORD", "admin")
-    db_password_file: str = "/run/secrets/db_password"
 
     model_config = {
         "env_file": ".env",
