@@ -552,6 +552,223 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: Get all categories
+      description: Retrieve all available categories for organizing ideas
+      operationId: getCategories
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriesResponse'
+              example:
+                categories:
+                  - id: "project"
+                    name: "Project"
+                    emoji: "🚀"
+                    created_at: "2024-12-01T10:00:00Z"
+                    updated_at: "2024-12-01T10:00:00Z"
+                  - id: "article"
+                    name: "Article"
+                    emoji: "📝"
+                    created_at: "2024-12-01T10:00:00Z"
+                    updated_at: "2024-12-01T10:00:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /ideas:
+    get:
+      tags:
+        - Ideas
+      summary: Get all ideas
+      description: Retrieve all ideas with optional search and category filtering. Supports pagination.
+      operationId: getIdeas
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Search term to filter ideas by title
+          schema:
+            type: string
+            example: "habit tracker"
+        - name: category
+          in: query
+          required: false
+          description: Category ID to filter ideas
+          schema:
+            type: string
+            example: "project"
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Ideas retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeasResponse'
+              example:
+                ideas:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    title: "Build a habit tracker app"
+                    description: "Simple app to track daily habits with streaks and analytics"
+                    category: "project"
+                    category_id: "project"
+                    tags: ["react", "typescript", "productivity"]
+                    created_at: "2024-12-01T10:00:00Z"
+                    updated_at: "2024-12-01T10:00:00Z"
+                meta:
+                  total: 1
+                  page: 1
+                  limit: 20
+                  pages: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+    
+    post:
+      tags:
+        - Ideas
+      summary: Create a new idea
+      description: Create a new idea with title, description, category, and optional tags
+      operationId: createIdea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdeaCreate'
+            example:
+              title: "Build a habit tracker app"
+              description: "Simple app to track daily habits with streaks and analytics"
+              category: "project"
+              tags: ["react", "typescript", "productivity"]
+      responses:
+        '201':
+          description: Idea created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeaResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                title: "Build a habit tracker app"
+                description: "Simple app to track daily habits with streaks and analytics"
+                category: "project"
+                category_id: "project"
+                tags: ["react", "typescript", "productivity"]
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T10:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /ideas/{ideaId}:
+    parameters:
+      - name: ideaId
+        in: path
+        required: true
+        description: Unique identifier for the idea
+        schema:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - Ideas
+      summary: Get a specific idea
+      description: Retrieve a specific idea by its ID
+      operationId: getIdea
+      responses:
+        '200':
+          description: Idea retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+    
+    put:
+      tags:
+        - Ideas
+      summary: Update an idea
+      description: Update an existing idea's properties. Only provided fields will be updated.
+      operationId: updateIdea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdeaUpdate'
+            example:
+              title: "Build an improved habit tracker app"
+              description: "Enhanced app to track daily habits with streaks, analytics, and reminders"
+              tags: ["react", "typescript", "productivity", "notifications"]
+      responses:
+        '200':
+          description: Idea updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdeaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+    
+    delete:
+      tags:
+        - Ideas
+      summary: Delete an idea
+      description: Delete a specific idea by its ID. This action cannot be undone.
+      operationId: deleteIdea
+      responses:
+        '200':
+          description: Idea deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1077,6 +1294,189 @@ components:
           description: Deletion timestamp
           example: "2024-12-01T10:00:00Z"
 
+    # Ideas App Schemas
+    CategoryBase:
+      type: object
+      required:
+        - name
+        - emoji
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the category
+          example: "Project"
+        emoji:
+          type: string
+          minLength: 1
+          maxLength: 10
+          description: Emoji icon for the category
+          example: "🚀"
+    
+    CategoryCreate:
+      allOf:
+        - $ref: '#/components/schemas/CategoryBase'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              minLength: 1
+              maxLength: 50
+              description: Unique identifier for the category
+              example: "project"
+    
+    CategoryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: New name for the category
+          example: "Personal Projects"
+        emoji:
+          type: string
+          minLength: 1
+          maxLength: 10
+          description: New emoji for the category
+          example: "🎯"
+    
+    CategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/CategoryBase'
+        - type: object
+          required:
+            - id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              description: Unique identifier for the category
+              example: "project"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+    
+    CategoriesResponse:
+      type: object
+      required:
+        - categories
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+          description: Array of categories
+    
+    IdeaBase:
+      type: object
+      required:
+        - title
+        - category
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Title of the idea
+          example: "Build a habit tracker app"
+        description:
+          type: string
+          description: Optional description of the idea
+          example: "Simple app to track daily habits with streaks and analytics"
+        category:
+          type: string
+          description: Category ID for the idea
+          example: "project"
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+          description: List of tags for the idea
+          example: ["react", "typescript", "productivity"]
+    
+    IdeaCreate:
+      $ref: '#/components/schemas/IdeaBase'
+    
+    IdeaUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: New title for the idea
+          example: "Build an improved habit tracker app"
+        description:
+          type: string
+          description: New description for the idea
+          example: "Enhanced app to track daily habits with streaks, analytics, and reminders"
+        category:
+          type: string
+          description: New category ID for the idea
+          example: "project"
+        tags:
+          type: array
+          items:
+            type: string
+          description: New tags for the idea
+          example: ["react", "typescript", "productivity", "notifications"]
+    
+    IdeaResponse:
+      allOf:
+        - $ref: '#/components/schemas/IdeaBase'
+        - type: object
+          required:
+            - id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for the idea
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            category_id:
+              type: string
+              description: ID of the category
+              example: "project"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+    
+    IdeasResponse:
+      type: object
+      required:
+        - ideas
+        - meta
+      properties:
+        ideas:
+          type: array
+          items:
+            $ref: '#/components/schemas/IdeaResponse'
+          description: Array of ideas
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
   responses:
     BadRequest:
       description: Bad request - invalid parameters or request body
@@ -1265,4 +1665,8 @@ tags:
   - name: Shopping Items
     description: Shopping item management operations within lists
   - name: Search
-    description: Global search functionality 
+    description: Global search functionality
+  - name: Categories
+    description: Category management for organizing ideas
+  - name: Ideas
+    description: Idea management operations with categories and tags 

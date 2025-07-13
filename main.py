@@ -7,6 +7,9 @@ from apps.todo.endpoints import (
     get_items, create_item, update_item, delete_item, toggle_item, reorder_items,
     search
 )
+from apps.ideas.endpoints import (
+    get_categories, get_ideas, create_idea, get_idea, update_idea, delete_idea
+)
 
 @get(
     path="/ping",
@@ -155,6 +158,12 @@ app = Esmerald(
         Gateway(handler=toggle_item),
         Gateway(handler=reorder_items),
         Gateway(handler=search),
+        Gateway(handler=get_categories),
+        Gateway(handler=get_ideas),
+        Gateway(handler=create_idea),
+        Gateway(handler=get_idea),
+        Gateway(handler=update_idea),
+        Gateway(handler=delete_idea),
         Gateway(handler=deployment_info),
     ],
     cors_config=cors_config,
