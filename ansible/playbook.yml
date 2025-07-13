@@ -96,6 +96,13 @@
         update_cache: yes
       tags: [packages, docker, nginx, postgres]
 
+    - name: Add user to docker group
+      user:
+        name: "{{ os_user }}"
+        groups: docker
+        append: yes
+      tags: [ user ]
+
     - name: Add PostgreSQL APT repository key
       apt_key:
         url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
