@@ -51,13 +51,13 @@ jobs:
           port: 22
           source: "./"
           target: ${{ secrets.BACKEND_DIR }}
-        script: |
-          cd ${{ secrets.BACKEND_DIR }}
-          git pull origin main
-          docker compose build
-          docker compose up -d --force-recreate
-          docker compose exec api python db/migrate.py
-          curl --fail http://localhost/ping
+          script: |
+            cd ${{ secrets.BACKEND_DIR }}
+            git pull origin main
+            docker compose build
+            docker compose up -d --force-recreate
+            docker compose exec api python db/migrate.py
+            curl --fail http://localhost/ping
 
       - name: Health check
         run: |
