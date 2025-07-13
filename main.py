@@ -10,6 +10,14 @@ from apps.todo.endpoints import (
 from apps.ideas.endpoints import (
     get_categories, get_ideas, create_idea, get_idea, update_idea, delete_idea
 )
+from apps.diary.endpoints import (
+    get_moods, get_diary_entries, create_diary_entry, get_diary_entry, 
+    update_diary_entry, delete_diary_entry, upload_image
+)
+from apps.food_planner.endpoints import (
+    get_meal_types, get_food_entries, create_food_entry, get_food_entry,
+    update_food_entry, delete_food_entry, get_food_summary, get_calendar_data, upload_food_image
+)
 
 @get(
     path="/ping",
@@ -170,6 +178,22 @@ app = Esmerald(
         Gateway(handler=get_idea),
         Gateway(handler=update_idea),
         Gateway(handler=delete_idea),
+        Gateway(handler=get_moods),
+        Gateway(handler=get_diary_entries),
+        Gateway(handler=create_diary_entry),
+        Gateway(handler=get_diary_entry),
+        Gateway(handler=update_diary_entry),
+        Gateway(handler=delete_diary_entry),
+        Gateway(handler=upload_image),
+        Gateway(handler=get_meal_types),
+        Gateway(handler=get_food_entries),
+        Gateway(handler=create_food_entry),
+        Gateway(handler=get_food_entry),
+        Gateway(handler=update_food_entry),
+        Gateway(handler=delete_food_entry),
+        Gateway(handler=get_food_summary),
+        Gateway(handler=get_calendar_data),
+        Gateway(handler=upload_food_image),
         Gateway(handler=deployment_info),
     ],
     cors_config=cors_config,

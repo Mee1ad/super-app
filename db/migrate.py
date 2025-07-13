@@ -8,6 +8,7 @@ import sys
 import os
 import logging
 from datetime import datetime
+import platform
 
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -17,6 +18,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db.session import models_registry, database
 from core.config import settings
+from apps.diary.models import Mood, DiaryEntry
+from apps.diary.schemas import MoodCreate
+from apps.food_planner.models import MealType, FoodEntry
+from apps.food_planner.schemas import MealTypeCreate
 
 # Configure logging
 logging.basicConfig(
@@ -189,6 +194,52 @@ async def verify_database():
         logger.error(f"❌ Database verification failed: {e}")
         return False
 
+async def create_diary_tables():
+    print("Creating diary app tables...")
+    from db.session import models_registry
+    await models_registry.create_all()
+    print("✅ Tables created successfully")
+
+async def seed_moods():
+    print("Seeding moods...")
+    moods = [
+        MoodCreate(id="happy", name="Happy", emoji="😊", color="text-yellow-500"),
+        MoodCreate(id="excited", name="Excited", emoji="🤩", color="text-orange-500"),
+        MoodCreate(id="calm", name="Calm", emoji="😌", color="text-blue-500"),
+        MoodCreate(id="sad", name="Sad", emoji="😢", color="text-gray-500"),
+        MoodCreate(id="angry", name="Angry", emoji="😠", color="text-red-500"),
+        MoodCreate(id="neutral", name="Neutral", emoji="😐", color="text-gray-400"),
+    ]
+    existing = await Mood.query.all()
+    if existing:
+        print("Moods already exist, skipping seed...")
+        return
+    for mood in moods:
+        await Mood.query.create(**mood.model_dump())
+    print("✅ Moods seeded successfully")
+
+async def create_food_planner_tables():
+    print("Creating food planner app tables...")
+    from db.session import models_registry
+    await models_registry.create_all()
+    print("✅ Food planner tables created successfully")
+
+async def seed_meal_types():
+    print("Seeding meal types...")
+    meal_types = [
+        MealTypeCreate(id="breakfast", name="Breakfast", emoji="🌅", time="08:00"),
+        MealTypeCreate(id="lunch", name="Lunch", emoji="🍕", time="12:00"),
+        MealTypeCreate(id="dinner", name="Dinner", emoji="🍽️", time="18:00"),
+        MealTypeCreate(id="snack", name="Snack", emoji="☕", time="15:00")
+    ]
+    existing = await MealType.query.all()
+    if existing:
+        print("Meal types already exist, skipping seed...")
+        return
+    for meal_type in meal_types:
+        await MealType.query.create(**meal_type.model_dump())
+    print("✅ Meal types seeded successfully")
+
 async def main():
     """Main migration function"""
     logger.info("🚀 Starting database migration process...")
@@ -225,6 +276,14 @@ async def main():
         if not await verify_database():
             logger.error("❌ Database verification failed")
             sys.exit(1)
+
+        await create_diary_tables()
+        await seed_moods()
+        print("🎉 Diary app migration completed successfully!")
+
+        await create_food_planner_tables()
+        await seed_meal_types()
+        print("🎉 Food planner app migration completed successfully!")
 
         logger.info("🎉 Database migration completed successfully!")
     finally:

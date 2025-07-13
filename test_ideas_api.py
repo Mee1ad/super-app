@@ -6,6 +6,7 @@ import asyncio
 import sys
 import os
 import platform
+import pytest
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -19,8 +20,11 @@ from apps.ideas.models import Category, Idea
 from apps.ideas.schemas import CategoryCreate, IdeaCreate
 
 
+@pytest.mark.asyncio
 async def test_ideas_api():
     """Test the ideas API functionality"""
+    from db.session import models_registry
+    await models_registry.create_all()
     try:
         print("🔧 Testing Ideas API...")
         

@@ -1,0 +1,937 @@
+openapi: 3.0.3
+info:
+  title: Food Planner API
+  description: |
+    A comprehensive REST API for managing food planning, meal tracking, and nutrition analytics.
+    
+    ## Features
+    - Create and manage meal plans and food entries
+    - Track meals by type (breakfast, lunch, dinner, snack)
+    - Categorize entries as planned or eaten
+    - Monitor plan adherence and nutrition goals
+    - Upload and attach images to food entries
+    - Generate summary statistics and calendar views
+    - Search and filter entries by various criteria
+    
+    ## Getting Started
+    1. Get available meal types: `GET /api/meal-types`
+    2. Create your first food entry: `POST /api/food-entries`
+    3. Upload food images: `POST /api/upload-food-image`
+    4. View summary statistics: `GET /api/food-entries/summary`
+    
+    ## Rate Limits
+    - Free Tier: 1,000 requests/hour
+    - Pro Tier: 10,000 requests/hour
+    - Enterprise: Custom limits
+    
+    ## Support
+    - Documentation: [docs.lifehub.com](https://docs.lifehub.com)
+    - Email: [support@lifehub.com](mailto:support@lifehub.com)
+    - Community: [Discord](https://discord.gg/lifehub)
+  version: 1.0.0
+  contact:
+    name: LifeHub API Support
+    email: support@lifehub.com
+    url: https://lifehub.com/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.lifehub.com/v1
+    description: Production server
+  - url: https://staging-api.lifehub.com/v1
+    description: Staging server
+  - url: http://localhost:8000
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/meal-types:
+    get:
+      tags:
+        - Meal Types
+      summary: Get all meal types
+      description: Retrieve all available meal types (breakfast, lunch, dinner, snack)
+      operationId: getMealTypes
+      responses:
+        '200':
+          description: Meal types retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealTypesResponse'
+              example:
+                meal_types:
+                  - id: "breakfast"
+                    name: "Breakfast"
+                    emoji: "🌅"
+                    time: "08:00"
+                    created_at: "2024-12-01T10:00:00Z"
+                  - id: "lunch"
+                    name: "Lunch"
+                    emoji: "🍕"
+                    time: "12:00"
+                    created_at: "2024-12-01T10:00:00Z"
+                  - id: "dinner"
+                    name: "Dinner"
+                    emoji: "🍽️"
+                    time: "18:00"
+                    created_at: "2024-12-01T10:00:00Z"
+                  - id: "snack"
+                    name: "Snack"
+                    emoji: "☕"
+                    time: "15:00"
+                    created_at: "2024-12-01T10:00:00Z"
+
+  /api/food-entries:
+    get:
+      tags:
+        - Food Planner
+      summary: Get all food entries
+      description: Retrieve all food entries with optional search, filtering, and pagination
+      operationId: getFoodEntries
+      parameters:
+        - name: search
+          in: query
+          description: Optional search term to filter entries by name
+          required: false
+          schema:
+            type: string
+            example: "oatmeal"
+        - name: category
+          in: query
+          description: Filter by category
+          required: false
+          schema:
+            type: string
+            enum: [planned, eaten]
+            example: "planned"
+        - name: meal_type
+          in: query
+          description: Filter by meal type ID
+          required: false
+          schema:
+            type: string
+            example: "breakfast"
+        - name: date_filter
+          in: query
+          description: Filter by specific date (YYYY-MM-DD)
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-12-01"
+        - name: page
+          in: query
+          description: Page number for pagination (default: 1)
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Number of entries per page (default: 20, max: 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+            example: 20
+      responses:
+        '200':
+          description: Food entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodEntriesResponse'
+              example:
+                entries:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    name: "Oatmeal with berries"
+                    category: "planned"
+                    meal_type_id: "breakfast"
+                    time: "08:00"
+                    date: "2024-12-01"
+                    comment: "Healthy start to the day"
+                    image: null
+                    followed_plan: null
+                    symptoms: []
+                    created_at: "2024-12-01T10:00:00Z"
+                    updated_at: "2024-12-01T10:00:00Z"
+                    meal_type:
+                      id: "breakfast"
+                      name: "Breakfast"
+                      emoji: "🌅"
+                      time: "08:00"
+                      created_at: "2024-12-01T10:00:00Z"
+                meta:
+                  total: 1
+                  page: 1
+                  limit: 20
+                  pages: 1
+    
+    post:
+      tags:
+        - Food Planner
+      summary: Create a new food entry
+      description: Create a new food entry with name, category, meal type, time, and optional details
+      operationId: createFoodEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodEntryCreate'
+            examples:
+              planned_meal:
+                summary: Create a planned meal
+                value:
+                  name: "Oatmeal with berries"
+                  category: "planned"
+                  meal_type_id: "breakfast"
+                  time: "08:00"
+                  date: "2024-12-01"
+                  comment: "Healthy start to the day"
+              eaten_meal:
+                summary: Create an eaten meal
+                value:
+                  name: "Grilled chicken salad"
+                  category: "eaten"
+                  meal_type_id: "lunch"
+                  time: "12:30"
+                  date: "2024-12-01"
+                  comment: "Felt great after this meal"
+                  followed_plan: true
+                  symptoms: ["energy", "satisfied"]
+      responses:
+        '201':
+          description: Food entry created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodEntryResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                name: "Oatmeal with berries"
+                category: "planned"
+                meal_type_id: "breakfast"
+                time: "08:00"
+                date: "2024-12-01"
+                comment: "Healthy start to the day"
+                image: null
+                followed_plan: null
+                symptoms: []
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T10:00:00Z"
+                meal_type:
+                  id: "breakfast"
+                  name: "Breakfast"
+                  emoji: "🌅"
+                  time: "08:00"
+                  created_at: "2024-12-01T10:00:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/food-entries/{entryId}:
+    parameters:
+      - name: entryId
+        in: path
+        description: Food entry ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - Food Planner
+      summary: Get a specific food entry
+      description: Retrieve a specific food entry by its ID
+      operationId: getFoodEntry
+      responses:
+        '200':
+          description: Food entry retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodEntryResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                name: "Oatmeal with berries"
+                category: "planned"
+                meal_type_id: "breakfast"
+                time: "08:00"
+                date: "2024-12-01"
+                comment: "Healthy start to the day"
+                image: null
+                followed_plan: null
+                symptoms: []
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T10:00:00Z"
+                meal_type:
+                  id: "breakfast"
+                  name: "Breakfast"
+                  emoji: "🌅"
+                  time: "08:00"
+                  created_at: "2024-12-01T10:00:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      tags:
+        - Food Planner
+      summary: Update a food entry
+      description: Update an existing food entry's properties. Only provided fields will be updated.
+      operationId: updateFoodEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodEntryUpdate'
+            examples:
+              update_name:
+                summary: Update name only
+                value:
+                  name: "Updated meal name"
+              update_category:
+                summary: Update category only
+                value:
+                  category: "eaten"
+                  followed_plan: true
+              full_update:
+                summary: Full update
+                value:
+                  name: "Updated meal"
+                  category: "eaten"
+                  meal_type_id: "lunch"
+                  time: "13:00"
+                  date: "2024-12-02"
+                  comment: "Updated comment"
+                  followed_plan: true
+                  symptoms: ["satisfied", "energized"]
+      responses:
+        '200':
+          description: Food entry updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodEntryResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                name: "Updated meal name"
+                category: "eaten"
+                meal_type_id: "breakfast"
+                time: "08:00"
+                date: "2024-12-01"
+                comment: "Healthy start to the day"
+                image: null
+                followed_plan: true
+                symptoms: []
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T11:30:00Z"
+                meal_type:
+                  id: "breakfast"
+                  name: "Breakfast"
+                  emoji: "🌅"
+                  time: "08:00"
+                  created_at: "2024-12-01T10:00:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    
+    delete:
+      tags:
+        - Food Planner
+      summary: Delete a food entry
+      description: Delete a specific food entry by its ID. This action cannot be undone.
+      operationId: deleteFoodEntry
+      responses:
+        '200':
+          description: Food entry deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Food entry deleted successfully"
+              example:
+                message: "Food entry deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/food-entries/summary:
+    get:
+      tags:
+        - Food Planner
+      summary: Get food entries summary
+      description: Get summary statistics for food entries within a date range
+      operationId: getFoodSummary
+      parameters:
+        - name: start_date
+          in: query
+          description: Start date for summary (YYYY-MM-DD)
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-12-01"
+        - name: end_date
+          in: query
+          description: End date for summary (YYYY-MM-DD)
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+      responses:
+        '200':
+          description: Summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodSummaryResponse'
+              example:
+                planned_count: 15
+                eaten_count: 12
+                followed_plan_count: 10
+                off_plan_count: 2
+
+  /api/food-entries/calendar:
+    get:
+      tags:
+        - Food Planner
+      summary: Get calendar data
+      description: Get daily summaries for calendar view within a date range
+      operationId: getCalendarData
+      parameters:
+        - name: start_date
+          in: query
+          description: Start date for calendar (YYYY-MM-DD)
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-12-01"
+        - name: end_date
+          in: query
+          description: End date for calendar (YYYY-MM-DD)
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+      responses:
+        '200':
+          description: Calendar data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarResponse'
+              example:
+                days:
+                  - date: "2024-12-01"
+                    planned_count: 3
+                    eaten_count: 2
+                    followed_plan: true
+                  - date: "2024-12-02"
+                    planned_count: 4
+                    eaten_count: 3
+                    followed_plan: false
+
+  /api/upload-food-image:
+    post:
+      tags:
+        - Food Planner
+      summary: Upload a food image
+      description: Upload an image for food entries and return its URL
+      operationId: uploadFoodImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file to upload (JPG, PNG, GIF supported)
+            examples:
+              upload_jpg:
+                summary: Upload JPG image
+                value:
+                  file: "food-image.jpg"
+              upload_png:
+                summary: Upload PNG image
+                value:
+                  file: "meal-screenshot.png"
+      responses:
+        '200':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - url
+                properties:
+                  url:
+                    type: string
+                    description: URL of the uploaded image
+                    example: "/static/uploads/food/image.jpg"
+              example:
+                url: "/static/uploads/food/oatmeal.jpg"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Bearer token authentication.
+        
+        Include your API token in the Authorization header:
+        ```
+        Authorization: Bearer <your-jwt-token>
+        ```
+        
+        Get your token from the [LifeHub dashboard](https://lifehub.com/dashboard/api-tokens).
+
+  schemas:
+    # Meal Type Schemas
+    MealTypeBase:
+      type: object
+      required:
+        - name
+        - emoji
+        - time
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the meal type
+          example: "Breakfast"
+        emoji:
+          type: string
+          minLength: 1
+          maxLength: 10
+          description: Emoji representation of the meal type
+          example: "🌅"
+        time:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          description: Default time for this meal type (HH:MM format)
+          example: "08:00"
+
+    MealTypeCreate(MealTypeBase):
+      allOf:
+        - $ref: '#/components/schemas/MealTypeBase'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              minLength: 1
+              maxLength: 50
+              description: Unique identifier for the meal type
+              example: "breakfast"
+
+    MealTypeResponse:
+      allOf:
+        - $ref: '#/components/schemas/MealTypeBase'
+        - type: object
+          required:
+            - id
+            - created_at
+          properties:
+            id:
+              type: string
+              description: Unique identifier for the meal type
+              example: "breakfast"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+
+    MealTypesResponse:
+      type: object
+      required:
+        - meal_types
+      properties:
+        meal_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/MealTypeResponse'
+          description: List of available meal types
+
+    # Food Entry Schemas
+    FoodEntryBase:
+      type: object
+      required:
+        - name
+        - category
+        - meal_type_id
+        - time
+        - date
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Name of the food entry
+          example: "Oatmeal with berries"
+        category:
+          type: string
+          enum: [planned, eaten]
+          description: Category of the food entry
+          example: "planned"
+        meal_type_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Meal type ID
+          example: "breakfast"
+        time:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          description: Time of the meal (HH:MM format)
+          example: "08:00"
+        date:
+          type: string
+          format: date
+          description: Date of the meal
+          example: "2024-12-01"
+        comment:
+          type: string
+          description: Optional comment about the meal
+          example: "Healthy start to the day"
+        image:
+          type: string
+          description: Optional image URL
+          example: "/static/uploads/food/oatmeal.jpg"
+        followed_plan:
+          type: boolean
+          description: Whether the eaten meal followed the plan (only for eaten entries)
+          example: true
+        symptoms:
+          type: array
+          items:
+            type: string
+          description: List of symptoms or feelings after the meal
+          example: ["energy", "satisfied"]
+
+    FoodEntryCreate:
+      $ref: '#/components/schemas/FoodEntryBase'
+
+    FoodEntryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Name of the food entry
+          example: "Oatmeal with berries"
+        category:
+          type: string
+          enum: [planned, eaten]
+          description: Category of the food entry
+          example: "planned"
+        meal_type_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Meal type ID
+          example: "breakfast"
+        time:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+          description: Time of the meal (HH:MM format)
+          example: "08:00"
+        date:
+          type: string
+          format: date
+          description: Date of the meal
+          example: "2024-12-01"
+        comment:
+          type: string
+          description: Optional comment about the meal
+          example: "Healthy start to the day"
+        image:
+          type: string
+          description: Optional image URL
+          example: "/static/uploads/food/oatmeal.jpg"
+        followed_plan:
+          type: boolean
+          description: Whether the eaten meal followed the plan (only for eaten entries)
+          example: true
+        symptoms:
+          type: array
+          items:
+            type: string
+          description: List of symptoms or feelings after the meal
+          example: ["energy", "satisfied"]
+
+    FoodEntryResponse:
+      allOf:
+        - $ref: '#/components/schemas/FoodEntryBase'
+        - type: object
+          required:
+            - id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for the food entry
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+            meal_type:
+              $ref: '#/components/schemas/MealTypeResponse'
+              description: Associated meal type object
+
+    FoodEntriesResponse:
+      type: object
+      required:
+        - entries
+        - meta
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FoodEntryResponse'
+          description: List of food entries
+        meta:
+          type: object
+          required:
+            - total
+            - page
+            - limit
+            - pages
+          properties:
+            total:
+              type: integer
+              description: Total number of entries
+              example: 25
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+            limit:
+              type: integer
+              description: Number of entries per page
+              example: 20
+            pages:
+              type: integer
+              description: Total number of pages
+              example: 2
+
+    FoodSummaryResponse:
+      type: object
+      required:
+        - planned_count
+        - eaten_count
+        - followed_plan_count
+        - off_plan_count
+      properties:
+        planned_count:
+          type: integer
+          description: Number of planned meals
+          example: 15
+        eaten_count:
+          type: integer
+          description: Number of eaten meals
+          example: 12
+        followed_plan_count:
+          type: integer
+          description: Number of eaten meals that followed the plan
+          example: 10
+        off_plan_count:
+          type: integer
+          description: Number of eaten meals that didn't follow the plan
+          example: 2
+
+    DaySummaryResponse:
+      type: object
+      required:
+        - date
+        - planned_count
+        - eaten_count
+        - followed_plan
+      properties:
+        date:
+          type: string
+          format: date
+          description: Date of the summary
+          example: "2024-12-01"
+        planned_count:
+          type: integer
+          description: Number of planned meals for the day
+          example: 3
+        eaten_count:
+          type: integer
+          description: Number of eaten meals for the day
+          example: 2
+        followed_plan:
+          type: boolean
+          description: Whether any eaten meals followed the plan
+          example: true
+
+    CalendarResponse:
+      type: object
+      required:
+        - days
+      properties:
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/DaySummaryResponse'
+          description: List of daily summaries
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid input data"
+              details:
+                - field: "name"
+                  issue: "Field is required"
+                  value: null
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    Unauthorized:
+      description: Authentication required or failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "AUTH_REQUIRED"
+              message: "Authentication required"
+              details:
+                header: "Authorization"
+                format: "Bearer <token>"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "RESOURCE_NOT_FOUND"
+              message: "Resource not found"
+              details:
+                resource: "food_entry"
+                id: "550e8400-e29b-41d4-a716-446655440000"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    ValidationError:
+      description: Validation errors in request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Validation failed"
+              details:
+                - field: "name"
+                  issue: "Field is required"
+                  value: null
+                - field: "meal_type_id"
+                  issue: "Invalid meal type ID"
+                  value: "invalid_type"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - request_id
+            - timestamp
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Invalid input data"
+            details:
+              oneOf:
+                - type: object
+                - type: array
+                  items:
+                    type: object
+              description: Additional error details
+              example:
+                field: "name"
+                issue: "Field is required"
+            request_id:
+              type: string
+              description: Unique request identifier for support
+              example: "req_1234567890abcdef"
+            timestamp:
+              type: string
+              format: date-time
+              description: Error timestamp
+              example: "2024-12-01T10:00:00Z"
+
+tags:
+  - name: Meal Types
+    description: Meal type management (breakfast, lunch, dinner, snack)
+  - name: Food Planner
+    description: Food entry management with planning, tracking, and analytics 

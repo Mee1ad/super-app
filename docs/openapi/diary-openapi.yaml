@@ -1,0 +1,701 @@
+openapi: 3.0.3
+info:
+  title: Diary API
+  description: |
+    A comprehensive REST API for managing diary entries with mood tracking and image uploads.
+    
+    ## Features
+    - Create and manage personal diary entries
+    - Track moods with emoji and color coding
+    - Upload and attach images to entries
+    - Search and filter entries by title and mood
+    - Pagination support for large collections
+    
+    ## Getting Started
+    1. Get available moods: `GET /api/moods`
+    2. Create your first entry: `POST /api/diary-entries`
+    3. Upload images: `POST /api/upload-image`
+    
+    ## Rate Limits
+    - Free Tier: 1,000 requests/hour
+    - Pro Tier: 10,000 requests/hour
+    - Enterprise: Custom limits
+    
+    ## Support
+    - Documentation: [docs.lifehub.com](https://docs.lifehub.com)
+    - Email: [support@lifehub.com](mailto:support@lifehub.com)
+    - Community: [Discord](https://discord.gg/lifehub)
+  version: 1.0.0
+  contact:
+    name: LifeHub API Support
+    email: support@lifehub.com
+    url: https://lifehub.com/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.lifehub.com/v1
+    description: Production server
+  - url: https://staging-api.lifehub.com/v1
+    description: Staging server
+  - url: http://localhost:8000
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/moods:
+    get:
+      tags:
+        - Moods
+      summary: Get all moods
+      description: Retrieve all available moods for diary entries
+      operationId: getMoods
+      responses:
+        '200':
+          description: Moods retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoodsResponse'
+              example:
+                moods:
+                  - id: "happy"
+                    name: "Happy"
+                    emoji: "😊"
+                    color: "#4CAF50"
+                    created_at: "2024-12-01T10:00:00Z"
+                  - id: "sad"
+                    name: "Sad"
+                    emoji: "😢"
+                    color: "#2196F3"
+                    created_at: "2024-12-01T10:00:00Z"
+                  - id: "angry"
+                    name: "Angry"
+                    emoji: "😠"
+                    color: "#F44336"
+                    created_at: "2024-12-01T10:00:00Z"
+                  - id: "calm"
+                    name: "Calm"
+                    emoji: "😌"
+                    color: "#9C27B0"
+                    created_at: "2024-12-01T10:00:00Z"
+
+  /api/diary-entries:
+    get:
+      tags:
+        - Diary
+      summary: Get all diary entries
+      description: Retrieve all diary entries with optional search and mood filtering. Supports pagination.
+      operationId: getDiaryEntries
+      parameters:
+        - name: search
+          in: query
+          description: Optional search term to filter entries by title
+          required: false
+          schema:
+            type: string
+            example: "great day"
+        - name: mood
+          in: query
+          description: Optional mood ID to filter entries
+          required: false
+          schema:
+            type: string
+            example: "happy"
+        - name: page
+          in: query
+          description: Page number for pagination (default: 1)
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Number of entries per page (default: 20, max: 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+            example: 20
+      responses:
+        '200':
+          description: Diary entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiaryEntriesResponse'
+              example:
+                entries:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    title: "My First Entry"
+                    content: "Today was a great day..."
+                    mood: "happy"
+                    date: "2024-12-01"
+                    images: []
+                    created_at: "2024-12-01T10:00:00Z"
+                    updated_at: "2024-12-01T10:00:00Z"
+                  - id: "660e8400-e29b-41d4-a716-446655440001"
+                    title: "Reflection Time"
+                    content: "Feeling a bit down today..."
+                    mood: "sad"
+                    date: "2024-12-02"
+                    images: ["/static/uploads/reflection.jpg"]
+                    created_at: "2024-12-02T15:30:00Z"
+                    updated_at: "2024-12-02T15:30:00Z"
+                meta:
+                  total: 2
+                  page: 1
+                  limit: 20
+                  pages: 1
+    
+    post:
+      tags:
+        - Diary
+      summary: Create a new diary entry
+      description: Create a new diary entry with title, content, mood, and optional images
+      operationId: createDiaryEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiaryEntryCreate'
+            examples:
+              basic_entry:
+                summary: Basic diary entry
+                value:
+                  title: "My First Entry"
+                  content: "Today was a great day..."
+                  mood: "happy"
+              entry_with_date:
+                summary: Entry with specific date
+                value:
+                  title: "Reflection Time"
+                  content: "Feeling a bit down today..."
+                  mood: "sad"
+                  date: "2024-12-01"
+              entry_with_images:
+                summary: Entry with images
+                value:
+                  title: "Amazing Sunset"
+                  content: "Captured this beautiful sunset today!"
+                  mood: "calm"
+                  images: ["/static/uploads/sunset.jpg"]
+      responses:
+        '201':
+          description: Diary entry created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiaryEntryResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                title: "My First Entry"
+                content: "Today was a great day..."
+                mood: "happy"
+                date: "2024-12-01"
+                images: []
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T10:00:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/diary-entries/{entryId}:
+    parameters:
+      - name: entryId
+        in: path
+        description: Diary entry ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - Diary
+      summary: Get a specific diary entry
+      description: Retrieve a specific diary entry by its ID
+      operationId: getDiaryEntry
+      responses:
+        '200':
+          description: Diary entry retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiaryEntryResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                title: "My First Entry"
+                content: "Today was a great day..."
+                mood: "happy"
+                date: "2024-12-01"
+                images: []
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T10:00:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      tags:
+        - Diary
+      summary: Update a diary entry
+      description: Update an existing diary entry's properties. Only provided fields will be updated.
+      operationId: updateDiaryEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiaryEntryUpdate'
+            examples:
+              update_title:
+                summary: Update title only
+                value:
+                  title: "Updated Entry Title"
+              update_mood:
+                summary: Update mood only
+                value:
+                  mood: "calm"
+              update_content:
+                summary: Update content only
+                value:
+                  content: "Updated content with more details..."
+              full_update:
+                summary: Full update
+                value:
+                  title: "Updated Entry"
+                  content: "Updated content"
+                  mood: "happy"
+                  date: "2024-12-02"
+                  images: ["/static/uploads/new-image.jpg"]
+      responses:
+        '200':
+          description: Diary entry updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiaryEntryResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                title: "Updated Entry Title"
+                content: "Updated content with more details..."
+                mood: "happy"
+                date: "2024-12-01"
+                images: []
+                created_at: "2024-12-01T10:00:00Z"
+                updated_at: "2024-12-01T11:30:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    
+    delete:
+      tags:
+        - Diary
+      summary: Delete a diary entry
+      description: Delete a specific diary entry by its ID. This action cannot be undone.
+      operationId: deleteDiaryEntry
+      responses:
+        '200':
+          description: Diary entry deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Diary entry deleted successfully"
+              example:
+                message: "Diary entry deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/upload-image:
+    post:
+      tags:
+        - Diary
+      summary: Upload an image
+      description: Upload an image and return its URL for use in diary entries
+      operationId: uploadImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file to upload (JPG, PNG, GIF supported)
+            examples:
+              upload_jpg:
+                summary: Upload JPG image
+                value:
+                  file: "image.jpg"
+              upload_png:
+                summary: Upload PNG image
+                value:
+                  file: "screenshot.png"
+      responses:
+        '200':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - url
+                properties:
+                  url:
+                    type: string
+                    description: URL of the uploaded image
+                    example: "/static/uploads/image.jpg"
+              example:
+                url: "/static/uploads/sunset.jpg"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Bearer token authentication.
+        
+        Include your API token in the Authorization header:
+        ```
+        Authorization: Bearer <your-jwt-token>
+        ```
+        
+        Get your token from the [LifeHub dashboard](https://lifehub.com/dashboard/api-tokens).
+
+  schemas:
+    # Mood Schemas
+    MoodBase:
+      type: object
+      required:
+        - name
+        - emoji
+        - color
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the mood
+          example: "Happy"
+        emoji:
+          type: string
+          minLength: 1
+          maxLength: 10
+          description: Emoji representation of the mood
+          example: "😊"
+        color:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Color code for the mood
+          example: "#4CAF50"
+
+    MoodCreate:
+      allOf:
+        - $ref: '#/components/schemas/MoodBase'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              minLength: 1
+              maxLength: 50
+              description: Unique identifier for the mood
+              example: "happy"
+
+    MoodResponse:
+      allOf:
+        - $ref: '#/components/schemas/MoodBase'
+        - type: object
+          required:
+            - id
+            - created_at
+          properties:
+            id:
+              type: string
+              description: Unique identifier for the mood
+              example: "happy"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+
+    MoodsResponse:
+      type: object
+      required:
+        - moods
+      properties:
+        moods:
+          type: array
+          items:
+            $ref: '#/components/schemas/MoodResponse'
+          description: List of available moods
+
+    # Diary Entry Schemas
+    DiaryEntryBase:
+      type: object
+      required:
+        - title
+        - content
+        - mood
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Title of the diary entry
+          example: "My First Entry"
+        content:
+          type: string
+          description: Content of the diary entry
+          example: "Today was a great day..."
+        mood:
+          type: string
+          description: Mood ID for the entry
+          example: "happy"
+        date:
+          type: string
+          format: date
+          description: Optional date for the entry
+          example: "2024-12-01"
+        images:
+          type: array
+          items:
+            type: string
+          description: List of image URLs
+          example: []
+
+    DiaryEntryCreate:
+      $ref: '#/components/schemas/DiaryEntryBase'
+
+    DiaryEntryUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Title of the diary entry
+          example: "My First Entry"
+        content:
+          type: string
+          description: Content of the diary entry
+          example: "Today was a great day..."
+        mood:
+          type: string
+          description: Mood ID for the entry
+          example: "happy"
+        date:
+          type: string
+          format: date
+          description: Optional date for the entry
+          example: "2024-12-01"
+        images:
+          type: array
+          items:
+            type: string
+          description: List of image URLs
+          example: []
+
+    DiaryEntryResponse:
+      allOf:
+        - $ref: '#/components/schemas/DiaryEntryBase'
+        - type: object
+          required:
+            - id
+            - created_at
+            - updated_at
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Unique identifier for the diary entry
+              example: "550e8400-e29b-41d4-a716-446655440000"
+            created_at:
+              type: string
+              format: date-time
+              description: Creation timestamp
+              example: "2024-12-01T10:00:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              description: Last update timestamp
+              example: "2024-12-01T10:00:00Z"
+
+    DiaryEntriesResponse:
+      type: object
+      required:
+        - entries
+        - meta
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiaryEntryResponse'
+          description: List of diary entries
+        meta:
+          type: object
+          required:
+            - total
+            - page
+            - limit
+            - pages
+          properties:
+            total:
+              type: integer
+              description: Total number of entries
+              example: 25
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+            limit:
+              type: integer
+              description: Number of entries per page
+              example: 20
+            pages:
+              type: integer
+              description: Total number of pages
+              example: 2
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid input data"
+              details:
+                - field: "title"
+                  issue: "Field is required"
+                  value: null
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    Unauthorized:
+      description: Authentication required or failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "AUTH_REQUIRED"
+              message: "Authentication required"
+              details:
+                header: "Authorization"
+                format: "Bearer <token>"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "RESOURCE_NOT_FOUND"
+              message: "Resource not found"
+              details:
+                resource: "diary_entry"
+                id: "550e8400-e29b-41d4-a716-446655440000"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    ValidationError:
+      description: Validation errors in request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Validation failed"
+              details:
+                - field: "title"
+                  issue: "Field is required"
+                  value: null
+                - field: "mood"
+                  issue: "Invalid mood ID"
+                  value: "invalid_mood"
+              request_id: "req_1234567890abcdef"
+              timestamp: "2024-12-01T10:00:00Z"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - request_id
+            - timestamp
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Invalid input data"
+            details:
+              oneOf:
+                - type: object
+                - type: array
+                  items:
+                    type: object
+              description: Additional error details
+              example:
+                field: "title"
+                issue: "Field is required"
+            request_id:
+              type: string
+              description: Unique request identifier for support
+              example: "req_1234567890abcdef"
+            timestamp:
+              type: string
+              format: date-time
+              description: Error timestamp
+              example: "2024-12-01T10:00:00Z"
+
+tags:
+  - name: Moods
+    description: Mood management for diary entries
+  - name: Diary
+    description: Diary entry management with mood tracking and image uploads 
