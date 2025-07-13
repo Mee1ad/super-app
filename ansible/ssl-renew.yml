@@ -1,0 +1,42 @@
+- hosts: web
+  become: true
+  vars_files:
+    - group_vars/all.yml
+  vars:
+    domain: api.todomodo.ir
+  tasks:
+    
+    - name: Check SSL certificate status
+      command: certbot certificates
+      register: cert_status
+      changed_when: false
+      tags: [ssl, status]
+
+    - name: Display certificate status
+      debug:
+        var: cert_status.stdout_lines
+      tags: [ssl, status]
+
+    - name: Renew SSL certificates
+      command: certbot renew --quiet --deploy-hook "systemctl reload nginx"
+      register: renew_result
+      changed_when: renew_result.rc == 0
+      failed_when: renew_result.rc != 0
+      tags: [ssl, renew]
+
+    - name: Display renewal result
+      debug:
+        var: renew_result.stdout_lines
+      when: renew_result.changed
+      tags: [ssl, renew]
+
+    - name: Test nginx configuration
+      command: nginx -t
+      tags: [ssl, test]
+
+    - name: Reload nginx if certificates were renewed
+      service:
+        name: nginx
+        state: reloaded
+      when: renew_result.changed
+      tags: [ssl, reload] 

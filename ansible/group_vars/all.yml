@@ -1,2 +1,3 @@
 backend_repo: https://{{ github_pat }}@github.com/Mee1ad/super-app
 backend_dir: /opt/backend-app
+certbot_email: soheilravasani@gmail.com
