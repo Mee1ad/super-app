@@ -5,9 +5,14 @@ Test script for the Ideas API endpoints
 import asyncio
 import sys
 import os
+import platform
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Fix Windows event loop issue
+if platform.system() == "Windows":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from db.session import database
 from apps.ideas.models import Category, Idea

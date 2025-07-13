@@ -2,7 +2,7 @@
 from typing import List as ListType, Optional
 from uuid import UUID
 
-from esmerald import get, post, put, delete, HTTPException, status
+from esmerald import get, post, put, delete, HTTPException, status, Query
 from esmerald.exceptions import NotFound
 from edgy.exceptions import ObjectNotFound
 
@@ -52,11 +52,13 @@ async def get_categories() -> CategoriesResponse:
     description="Retrieve all ideas with optional search and category filtering. Supports pagination."
 )
 async def get_ideas(
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    page: int = 1,
-    limit: int = 20
+    search: Optional[str] = Query(default=None, description="Optional search term to filter ideas by title"),
+    category: Optional[str] = Query(default=None, description="Optional category ID to filter ideas"),
+    page: int = Query(default=1, description="Page number for pagination (default: 1)"),
+    limit: int = Query(default=20, description="Number of ideas per page (default: 20, max: 100)")
 ) -> IdeasResponse:
+    print(f"[DEBUG] category param value: {category}, type: {type(category)}")
+    print(f"[DEBUG] search: {search}, category: {category}, page: {page}, limit: {limit}")
     """
     Retrieve all ideas with optional filtering and pagination.
     
@@ -89,9 +91,15 @@ async def get_ideas(
         page=page,
         limit=limit
     )
+    print(f"[DEBUG] result from service: {result}")
     
+    try:
+        ideas_response = [IdeaResponse.model_validate_from_orm(idea) for idea in result["ideas"]]
+    except Exception as e:
+        print(f"[DEBUG] Error converting ideas to IdeaResponse: {e}")
+        raise
     return IdeasResponse(
-        ideas=[IdeaResponse.model_validate_from_orm(idea) for idea in result["ideas"]],
+        ideas=ideas_response,
         meta=PaginationMeta(
             total=result["total"],
             page=result["page"],

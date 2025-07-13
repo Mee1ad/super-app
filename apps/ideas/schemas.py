@@ -58,23 +58,31 @@ class IdeaResponse(IdeaBase):
     
     @classmethod
     def model_validate_from_orm(cls, obj):
-        """Extract data from Edgy ORM model with proper category_id handling"""
+        """Extract data from Edgy ORM model with proper category_id and category handling"""
         data = {}
         for field_name in cls.model_fields.keys():
             if field_name == 'category_id':
                 # Special handling for category_id - extract string from ForeignKey field
                 if hasattr(obj, 'category'):
                     category_value = getattr(obj, 'category')
-                    # If category_value is a Category object, get its id; otherwise it should be a string
                     if hasattr(category_value, 'id'):
                         data['category_id'] = category_value.id
                     else:
                         data['category_id'] = category_value
                 elif hasattr(obj, 'category_id'):
                     data['category_id'] = getattr(obj, 'category_id')
+            elif field_name == 'category':
+                # Always set category as the category id (string)
+                if hasattr(obj, 'category'):
+                    category_value = getattr(obj, 'category')
+                    if hasattr(category_value, 'id'):
+                        data['category'] = category_value.id
+                    else:
+                        data['category'] = category_value
+                elif hasattr(obj, 'category_id'):
+                    data['category'] = getattr(obj, 'category_id')
             elif hasattr(obj, field_name):
                 data[field_name] = getattr(obj, field_name)
-            
         return cls.model_validate(data)
 
 
