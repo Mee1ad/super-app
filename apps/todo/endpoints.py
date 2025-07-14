@@ -2,7 +2,7 @@
 from typing import List as ListType
 from uuid import UUID
 
-from esmerald import get, post, put, delete, HTTPException, status
+from esmerald import get, post, put, delete, HTTPException, status, Request
 from esmerald.exceptions import NotFound
 from edgy.exceptions import ObjectNotFound
 
@@ -15,6 +15,7 @@ from .schemas import (
 )
 from .services import ListService, TaskService, ShoppingItemService, SearchService
 from db.session import database
+from core.dependencies import get_current_user_id
 
 # Dependency injection
 from db.session import database
@@ -31,7 +32,7 @@ search_service = SearchService(database)
     summary="Get all lists",
     description="Retrieve all lists for the authenticated user. Supports pagination and filtering by type."
 )
-async def get_lists() -> ListType[ListResponse]:
+async def get_lists(request: Request) -> ListType[ListResponse]:
     """
     Retrieve all lists for the authenticated user.
     
@@ -46,508 +47,448 @@ async def get_lists() -> ListType[ListResponse]:
         401: Authentication required - Include valid Authorization header
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    lists = await list_service.get_all_lists()
-    return [ListResponse.model_validate(list_obj) for list_obj in lists]
+    user_id = await get_current_user_id(request)
+    lists = await list_service.get_all_lists(user_id)
+    return [ListResponse.model_validate_from_orm(list_obj) for list_obj in lists]
+
 
 @post(
     path="/api/lists",
     tags=["Lists"],
     summary="Create a new list",
-    description="Create a new todo or shopping list. The list type determines whether it will contain tasks or shopping items."
+    description="Create a new list for the authenticated user."
 )
-async def create_list(data: ListCreate) -> ListResponse:
+async def create_list(
+    request: Request,
+    data: ListCreate
+) -> ListResponse:
     """
-    Create a new todo or shopping list.
-    
-    This endpoint creates a new list with the specified type and properties.
-    The list type determines whether it will contain tasks (for todo lists)
-    or shopping items (for shopping lists).
+    Create a new list for the authenticated user.
     
     Args:
-        data: ListCreate schema containing list details
+        data: List creation data
         
     Returns:
-        ListResponse: The created list with generated ID and timestamps
+        ListResponse: Created list information
         
     Raises:
-        400: Bad request - Invalid request format or missing required fields
+        400: Bad request - Invalid list data
         401: Authentication required - Include valid Authorization header
-        422: Validation error - Required fields missing or invalid values
-        429: Rate limit exceeded - Too many requests, retry after delay
+        422: Validation error - Invalid input data
     """
-    list_obj = await list_service.create_list(data)
-    return ListResponse.model_validate(list_obj)
+    user_id = await get_current_user_id(request)
+    list_obj = await list_service.create_list(data, user_id)
+    return ListResponse.model_validate_from_orm(list_obj)
+
 
 @put(
     path="/api/lists/{list_id:uuid}",
     tags=["Lists"],
     summary="Update a list",
-    description="Update an existing list's properties. Only provided fields will be updated."
+    description="Update an existing list for the authenticated user."
 )
-async def update_list(list_id: UUID, data: ListUpdate) -> ListResponse:
+async def update_list(
+    request: Request,
+    list_id: UUID,
+    data: ListUpdate
+) -> ListResponse:
     """
-    Update an existing list's properties.
-    
-    This endpoint allows partial updates to a list. Only the fields provided
-    in the request will be updated. The list type cannot be changed after creation.
+    Update an existing list for the authenticated user.
     
     Args:
-        list_id: UUID of the list to update
-        data: ListUpdate schema containing fields to update
+        list_id: ID of the list to update
+        data: List update data
         
     Returns:
-        ListResponse: The updated list with new timestamps
+        ListResponse: Updated list information
         
     Raises:
-        400: Bad request - Invalid request format or missing required fields
+        400: Bad request - Invalid list data
         401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        422: Validation error - Provided fields contain invalid values
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - List not found
+        422: Validation error - Invalid input data
     """
-    try:
-        list_obj = await list_service.update_list(list_id, data)
-        return ListResponse.model_validate(list_obj)
-    except ObjectNotFound:
-        raise NotFound("List not found")
+    user_id = await get_current_user_id(request)
+    list_obj = await list_service.update_list(list_id, data, user_id)
+    return ListResponse.model_validate_from_orm(list_obj)
+
 
 @delete(
     path="/api/lists/{list_id:uuid}",
-    status_code=200,
     tags=["Lists"],
     summary="Delete a list",
-    description="Delete a list and all its associated tasks or shopping items. This action cannot be undone."
+    description="Delete a list and all its items for the authenticated user.",
+    status_code=200
 )
-async def delete_list(list_id: UUID) -> dict:
+async def delete_list(
+    request: Request,
+    list_id: UUID
+) -> dict:
     """
-    Delete a list and all its associated items.
-    
-    This endpoint permanently deletes a list and all its associated tasks
-    or shopping items. This action cannot be undone.
+    Delete a list and all its items for the authenticated user.
     
     Args:
-        list_id: UUID of the list to delete
+        list_id: ID of the list to delete
         
     Returns:
-        dict: Success message confirming deletion
+        dict: Success message
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - List not found
     """
-    try:
-        await list_service.delete_list(list_id)
-        return {"message": "List deleted successfully"}
-    except ObjectNotFound:
-        raise NotFound("List not found")
+    user_id = await get_current_user_id(request)
+    await list_service.delete_list(list_id, user_id)
+    return {"message": "List deleted successfully"}
 
 
-# Task endpoints
 @get(
     path="/api/lists/{list_id:uuid}/tasks",
     tags=["Tasks"],
-    summary="Get tasks in a list",
-    description="Retrieve all tasks in a specific list. Tasks are returned in their current order."
+    summary="Get tasks for a list",
+    description="Retrieve all tasks for a specific list belonging to the authenticated user."
 )
-async def get_tasks(list_id: UUID) -> ListType[TaskResponse]:
+async def get_tasks(
+    request: Request,
+    list_id: UUID
+) -> ListType[TaskResponse]:
     """
-    Retrieve all tasks in a specific list.
-    
-    This endpoint returns all tasks belonging to the specified list.
-    Tasks are returned in their current position order.
+    Retrieve all tasks for a specific list belonging to the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the tasks
+        list_id: ID of the list
         
     Returns:
-        List[TaskResponse]: Array of tasks in their current order
+        List[TaskResponse]: Array of tasks
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - List not found
     """
+    user_id = await get_current_user_id(request)
     try:
-        # Validate that the list exists
-        await list_service.get_list_by_id(list_id)
-        tasks = await task_service.get_tasks_by_list(list_id)
-        return [TaskResponse.model_validate_from_orm(task) for task in tasks]
+        parent_list = await list_service.get_list_by_id(list_id, user_id)
     except ObjectNotFound:
-        raise NotFound("List not found")
+        raise HTTPException(status_code=404, detail="List not found")
+    tasks = await task_service.get_tasks_by_list(list_id, user_id)
+    return [TaskResponse.model_validate_from_orm(task) for task in tasks]
+
 
 @post(
     path="/api/lists/{list_id:uuid}/tasks",
     tags=["Tasks"],
     summary="Create a new task",
-    description="Create a new task in a specific list. The task will be added to the end of the list by default."
+    description="Create a new task in a list for the authenticated user."
 )
-async def create_task(list_id: UUID, data: TaskCreate) -> TaskResponse:
-    """
-    Create a new task in a specific list.
-    
-    This endpoint creates a new task and adds it to the specified list.
-    The task will be positioned at the end of the list by default.
-    
-    Args:
-        list_id: UUID of the list to add the task to
-        data: TaskCreate schema containing task details
-        
-    Returns:
-        TaskResponse: The created task with generated ID and timestamps
-        
-    Raises:
-        400: Bad request - Invalid request format or missing required fields
-        401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        422: Validation error - Required fields missing or invalid values
-        429: Rate limit exceeded - Too many requests, retry after delay
-    """
+async def create_task(
+    request: Request,
+    list_id: UUID,
+    data: TaskCreate
+) -> TaskResponse:
+    user_id = await get_current_user_id(request)
     try:
-        # Validate that the list exists
-        await list_service.get_list_by_id(list_id)
-        task = await task_service.create_task(list_id, data)
-        return TaskResponse.model_validate_from_orm(task)
+        parent_list = await list_service.get_list_by_id(list_id, user_id)
     except ObjectNotFound:
-        raise NotFound("List not found")
+        raise HTTPException(status_code=404, detail="List not found")
+    task_data = data.model_dump()
+    task = await task_service.create_task(task_data, user_id, list_id)
+    return TaskResponse.model_validate_from_orm(task)
+
 
 @put(
-    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
+    path="/api/tasks/{task_id:uuid}",
     tags=["Tasks"],
     summary="Update a task",
-    description="Update an existing task's properties. Only provided fields will be updated."
+    description="Update an existing task for the authenticated user."
 )
-async def update_task(list_id: UUID, task_id: UUID, data: TaskUpdate) -> TaskResponse:
+async def update_task(
+    request: Request,
+    task_id: UUID,
+    data: TaskUpdate
+) -> TaskResponse:
     """
-    Update an existing task's properties.
-    
-    This endpoint allows partial updates to a task. Only the fields provided
-    in the request will be updated. Position changes will reorder the task in the list.
+    Update an existing task for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the task
-        task_id: UUID of the task to update
-        data: TaskUpdate schema containing fields to update
+        task_id: ID of the task to update
+        data: Task update data
         
     Returns:
-        TaskResponse: The updated task with new timestamps
+        TaskResponse: Updated task information
         
     Raises:
-        400: Bad request - Invalid request format or missing required fields
+        400: Bad request - Invalid task data
         401: Authentication required - Include valid Authorization header
-        404: List or task not found - List or task with specified ID does not exist
-        422: Validation error - Provided fields contain invalid values
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - Task not found
+        422: Validation error - Invalid input data
     """
-    try:
-        task = await task_service.update_task(task_id, data, list_id=list_id)
-        return TaskResponse.model_validate_from_orm(task)
-    except ObjectNotFound:
-        raise NotFound("Task not found")
+    user_id = await get_current_user_id(request)
+    task = await task_service.update_task(task_id, data, user_id)
+    return TaskResponse.model_validate_from_orm(task)
+
 
 @delete(
-    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
-    status_code=200,
+    path="/api/tasks/{task_id:uuid}",
     tags=["Tasks"],
     summary="Delete a task",
-    description="Delete a specific task from a list. This action cannot be undone."
+    description="Delete a task for the authenticated user.",
+    status_code=200
 )
-async def delete_task(list_id: UUID, task_id: UUID) -> dict:
+async def delete_task(
+    request: Request,
+    task_id: UUID
+) -> dict:
     """
-    Delete a specific task from a list.
-    
-    This endpoint permanently deletes a task from the specified list.
-    This action cannot be undone.
+    Delete a task for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the task
-        task_id: UUID of the task to delete
+        task_id: ID of the task to delete
         
     Returns:
-        dict: Success message confirming deletion
+        dict: Success message
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List or task not found - List or task with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - Task not found
     """
-    try:
-        await task_service.delete_task(task_id)
-        return {"message": "Task deleted successfully"}
-    except ObjectNotFound:
-        raise NotFound("Task not found")
+    user_id = await get_current_user_id(request)
+    await task_service.delete_task(task_id, user_id)
+    return {"message": "Task deleted successfully"}
+
 
 @put(
-    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}/toggle",
+    path="/api/tasks/{task_id:uuid}/toggle",
     tags=["Tasks"],
     summary="Toggle task completion",
-    description="Toggle the checked status of a task (complete/incomplete)."
+    description="Toggle the completion status of a task for the authenticated user."
 )
-async def toggle_task(list_id: UUID, task_id: UUID) -> TaskResponse:
+async def toggle_task(
+    request: Request,
+    task_id: UUID
+) -> TaskResponse:
     """
-    Toggle the completion status of a task.
-    
-    This endpoint toggles the checked status of a task between true and false.
-    This is a convenient way to mark tasks as complete or incomplete.
+    Toggle the completion status of a task for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the task
-        task_id: UUID of the task to toggle
+        task_id: ID of the task to toggle
         
     Returns:
-        TaskResponse: The updated task with toggled checked status
+        TaskResponse: Updated task information
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List or task not found - List or task with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - Task not found
     """
-    try:
-        task = await task_service.toggle_task(task_id)
-        return TaskResponse.model_validate_from_orm(task)
-    except ObjectNotFound:
-        raise NotFound("Task not found")
+    user_id = await get_current_user_id(request)
+    task = await task_service.toggle_task(task_id, user_id)
+    return TaskResponse.model_validate_from_orm(task)
+
 
 @put(
     path="/api/lists/{list_id:uuid}/tasks/reorder",
     tags=["Tasks"],
     summary="Reorder tasks",
-    description="Reorder tasks in a list by providing their IDs in the desired order."
+    description="Reorder tasks in a list for the authenticated user."
 )
-async def reorder_tasks(list_id: UUID, data: ReorderRequest) -> ListType[TaskResponse]:
+async def reorder_tasks(
+    request: Request,
+    list_id: UUID,
+    data: ReorderRequest
+) -> ListType[TaskResponse]:
     """
-    Reorder tasks in a list.
-    
-    This endpoint allows bulk reordering of tasks by providing their IDs
-    in the desired order. All tasks in the list should be included in the order.
+    Reorder tasks in a list for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the tasks
-        data: ReorderRequest containing array of task IDs in desired order
+        list_id: ID of the list containing the tasks
+        data: Reorder request data with item IDs and positions
         
     Returns:
-        List[TaskResponse]: Array of tasks in their new order
+        List[TaskResponse]: Updated tasks in new order
         
     Raises:
-        400: Bad request - Invalid request format or missing required fields
+        400: Bad request - Invalid reorder data
         401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        422: Validation error - Task IDs are invalid or missing
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - List not found
+        422: Validation error - Invalid input data
     """
-    try:
-        tasks = await task_service.reorder_tasks(list_id, data.item_ids)
-        return [TaskResponse.model_validate_from_orm(task) for task in tasks]
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except ObjectNotFound:
-        raise NotFound("List or task not found")
+    user_id = await get_current_user_id(request)
+    tasks = await task_service.reorder_tasks(list_id, data, user_id)
+    return [TaskResponse.model_validate_from_orm(task) for task in tasks]
+
 
 @get(
     path="/api/lists/{list_id:uuid}/items",
     tags=["Shopping Items"],
-    summary="Get shopping items in a list",
-    description="Retrieve all shopping items in a specific list. Items are returned in their current order."
+    summary="Get shopping items for a list",
+    description="Retrieve all shopping items for a specific list belonging to the authenticated user."
 )
-async def get_items(list_id: UUID) -> ListType[ShoppingItemResponse]:
+async def get_items(
+    request: Request,
+    list_id: UUID
+) -> ListType[ShoppingItemResponse]:
     """
-    Retrieve all shopping items in a specific list.
-    
-    This endpoint returns all shopping items belonging to the specified list.
-    Items are returned in their current position order.
+    Retrieve all shopping items for a specific list belonging to the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the shopping items
+        list_id: ID of the list
         
     Returns:
-        List[ShoppingItemResponse]: Array of shopping items in their current order
+        List[ShoppingItemResponse]: Array of shopping items
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - List not found
     """
+    user_id = await get_current_user_id(request)
     try:
-        # Validate that the list exists
-        await list_service.get_list_by_id(list_id)
-        items = await shopping_item_service.get_items_by_list(list_id)
-        return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
+        parent_list = await list_service.get_list_by_id(list_id, user_id)
     except ObjectNotFound:
-        raise NotFound("List not found")
+        raise HTTPException(status_code=404, detail="List not found")
+    items = await shopping_item_service.get_items_by_list(list_id, user_id)
+    return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
+
 
 @post(
     path="/api/lists/{list_id:uuid}/items",
     tags=["Shopping Items"],
     summary="Create a new shopping item",
-    description="Create a new shopping item in a specific list. The item will be added to the end of the list by default."
+    description="Create a new shopping item in a list for the authenticated user."
 )
-async def create_item(list_id: UUID, data: ShoppingItemCreate) -> ShoppingItemResponse:
-    """
-    Create a new shopping item in a specific list.
-    
-    This endpoint creates a new shopping item and adds it to the specified list.
-    The item will be positioned at the end of the list by default.
-    
-    Args:
-        list_id: UUID of the list to add the shopping item to
-        data: ShoppingItemCreate schema containing item details
-        
-    Returns:
-        ShoppingItemResponse: The created shopping item with generated ID and timestamps
-        
-    Raises:
-        400: Bad request - Invalid request format or missing required fields
-        401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        422: Validation error - Required fields missing or invalid values
-        429: Rate limit exceeded - Too many requests, retry after delay
-    """
+async def create_item(
+    request: Request,
+    list_id: UUID,
+    data: ShoppingItemCreate
+) -> ShoppingItemResponse:
+    user_id = await get_current_user_id(request)
     try:
-        # Validate that the list exists
-        await list_service.get_list_by_id(list_id)
-        item = await shopping_item_service.create_item(list_id, data)
-        return ShoppingItemResponse.model_validate_from_orm(item)
+        parent_list = await list_service.get_list_by_id(list_id, user_id)
     except ObjectNotFound:
-        raise NotFound("List not found")
+        raise HTTPException(status_code=404, detail="List not found")
+    item_data = data.model_dump()
+    item = await shopping_item_service.create_item(item_data, user_id, list_id)
+    return ShoppingItemResponse.model_validate_from_orm(item)
+
 
 @put(
-    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
+    path="/api/items/{item_id:uuid}",
     tags=["Shopping Items"],
     summary="Update a shopping item",
-    description="Update an existing shopping item's properties. Only provided fields will be updated."
+    description="Update an existing shopping item for the authenticated user."
 )
-async def update_item(list_id: UUID, item_id: UUID, data: ShoppingItemUpdate) -> ShoppingItemResponse:
+async def update_item(
+    request: Request,
+    item_id: UUID,
+    data: ShoppingItemUpdate
+) -> ShoppingItemResponse:
     """
-    Update an existing shopping item's properties.
-    
-    This endpoint allows partial updates to a shopping item. Only the fields provided
-    in the request will be updated. Position changes will reorder the item in the list.
+    Update an existing shopping item for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the shopping item
-        item_id: UUID of the shopping item to update
-        data: ShoppingItemUpdate schema containing fields to update
+        item_id: ID of the item to update
+        data: Shopping item update data
         
     Returns:
-        ShoppingItemResponse: The updated shopping item with new timestamps
+        ShoppingItemResponse: Updated shopping item information
         
     Raises:
-        400: Bad request - Invalid request format or missing required fields
+        400: Bad request - Invalid item data
         401: Authentication required - Include valid Authorization header
-        404: List or shopping item not found - List or item with specified ID does not exist
-        422: Validation error - Provided fields contain invalid values
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - Item not found
+        422: Validation error - Invalid input data
     """
-    try:
-        item = await shopping_item_service.update_item(item_id, data, list_id=list_id)
-        return ShoppingItemResponse.model_validate_from_orm(item)
-    except ObjectNotFound:
-        raise NotFound("Shopping item not found")
+    user_id = await get_current_user_id(request)
+    item = await shopping_item_service.update_item(item_id, data, user_id)
+    return ShoppingItemResponse.model_validate_from_orm(item)
+
 
 @delete(
-    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
-    status_code=200,
+    path="/api/items/{item_id:uuid}",
     tags=["Shopping Items"],
     summary="Delete a shopping item",
-    description="Delete a specific shopping item from a list. This action cannot be undone."
+    description="Delete a shopping item for the authenticated user.",
+    status_code=200
 )
-async def delete_item(list_id: UUID, item_id: UUID) -> dict:
+async def delete_item(
+    request: Request,
+    item_id: UUID
+) -> dict:
     """
-    Delete a specific shopping item from a list.
-    
-    This endpoint permanently deletes a shopping item from the specified list.
-    This action cannot be undone.
+    Delete a shopping item for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the shopping item
-        item_id: UUID of the shopping item to delete
+        item_id: ID of the item to delete
         
     Returns:
-        dict: Success message confirming deletion
+        dict: Success message
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List or shopping item not found - List or item with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - Item not found
     """
-    try:
-        await shopping_item_service.delete_item(item_id)
-        return {"message": "Shopping item deleted successfully"}
-    except ObjectNotFound:
-        raise NotFound("Shopping item not found")
+    user_id = await get_current_user_id(request)
+    await shopping_item_service.delete_item(item_id, user_id)
+    return {"message": "Shopping item deleted successfully"}
+
 
 @put(
-    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}/toggle",
+    path="/api/items/{item_id:uuid}/toggle",
     tags=["Shopping Items"],
     summary="Toggle shopping item completion",
-    description="Toggle the checked status of a shopping item (purchased/not purchased)."
+    description="Toggle the completion status of a shopping item for the authenticated user."
 )
-async def toggle_item(list_id: UUID, item_id: UUID) -> ShoppingItemResponse:
+async def toggle_item(
+    request: Request,
+    item_id: UUID
+) -> ShoppingItemResponse:
     """
-    Toggle the completion status of a shopping item.
-    
-    This endpoint toggles the checked status of a shopping item between true and false.
-    This is a convenient way to mark items as purchased or not purchased.
+    Toggle the completion status of a shopping item for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the shopping item
-        item_id: UUID of the shopping item to toggle
+        item_id: ID of the item to toggle
         
     Returns:
-        ShoppingItemResponse: The updated shopping item with toggled checked status
+        ShoppingItemResponse: Updated shopping item information
         
     Raises:
-        400: Bad request - Invalid UUID format
         401: Authentication required - Include valid Authorization header
-        404: List or shopping item not found - List or item with specified ID does not exist
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - Item not found
     """
-    try:
-        item = await shopping_item_service.toggle_item(item_id)
-        return ShoppingItemResponse.model_validate_from_orm(item)
-    except ObjectNotFound:
-        raise NotFound("Shopping item not found")
+    user_id = await get_current_user_id(request)
+    item = await shopping_item_service.toggle_item(item_id, user_id)
+    return ShoppingItemResponse.model_validate_from_orm(item)
+
 
 @put(
     path="/api/lists/{list_id:uuid}/items/reorder",
     tags=["Shopping Items"],
     summary="Reorder shopping items",
-    description="Reorder shopping items in a list by providing their IDs in the desired order."
+    description="Reorder shopping items in a list for the authenticated user."
 )
-async def reorder_items(list_id: UUID, data: ReorderRequest) -> ListType[ShoppingItemResponse]:
+async def reorder_items(
+    request: Request,
+    list_id: UUID,
+    data: ReorderRequest
+) -> ListType[ShoppingItemResponse]:
     """
-    Reorder shopping items in a list.
-    
-    This endpoint allows bulk reordering of shopping items by providing their IDs
-    in the desired order. All items in the list should be included in the order.
+    Reorder shopping items in a list for the authenticated user.
     
     Args:
-        list_id: UUID of the list containing the shopping items
-        data: ReorderRequest containing array of item IDs in desired order
+        list_id: ID of the list containing the items
+        data: Reorder request data with item IDs and positions
         
     Returns:
-        List[ShoppingItemResponse]: Array of shopping items in their new order
+        List[ShoppingItemResponse]: Updated items in new order
         
     Raises:
-        400: Bad request - Invalid request format or missing required fields
+        400: Bad request - Invalid reorder data
         401: Authentication required - Include valid Authorization header
-        404: List not found - List with specified ID does not exist
-        422: Validation error - Item IDs are invalid or missing
-        429: Rate limit exceeded - Too many requests, retry after delay
+        404: Not found - List not found
+        422: Validation error - Invalid input data
     """
-    try:
-        items = await shopping_item_service.reorder_items(list_id, data.item_ids)
-        return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except ObjectNotFound:
-        raise NotFound("List or shopping item not found")
+    user_id = await get_current_user_id(request)
+    items = await shopping_item_service.reorder_items(list_id, data, user_id)
+    return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
+
 
 @get(
     path="/api/search",
@@ -555,9 +496,12 @@ async def reorder_items(list_id: UUID, data: ReorderRequest) -> ListType[Shoppin
     summary="Search across all content",
     description="Search for lists, tasks, and shopping items across all user content. Minimum 2 characters required."
 )
-async def search(q: str) -> SearchResponse:
+async def search(
+    request: Request,
+    q: str
+) -> SearchResponse:
     """
-    Search across all lists, tasks, and shopping items.
+    Search across all lists, tasks, and shopping items for the authenticated user.
     
     This endpoint performs a full-text search across all user content
     including lists, tasks, and shopping items. Results are grouped by type.
@@ -576,9 +520,10 @@ async def search(q: str) -> SearchResponse:
     if len(q.strip()) < 3:
         raise HTTPException(status_code=400, detail="Search query must be at least 3 characters long")
     
-    results = await search_service.search_all(q)
+    user_id = await get_current_user_id(request)
+    results = await search_service.search_all(q, user_id)
     return SearchResponse(
-        lists=[ListResponse.model_validate(list_obj) for list_obj in results["lists"]],
+        lists=[ListResponse.model_validate_from_orm(list_obj) for list_obj in results["lists"]],
         tasks=[TaskResponse.model_validate_from_orm(task) for task in results["tasks"]],
         shopping_items=[ShoppingItemResponse.model_validate_from_orm(item) for item in results["shopping_items"]]
     )

@@ -22,6 +22,7 @@ class Variant(str, Enum):
 class List(BaseModel):
     """List model for organizing tasks and shopping items"""
     
+    user = fields.ForeignKey("User", on_delete="cascade", related_name="lists")
     type: fields.ChoiceField = fields.ChoiceField(
         choices=ListType,
         max_length=20
@@ -41,6 +42,7 @@ class List(BaseModel):
 class Task(BaseModel):
     """Task model for todo items"""
     
+    user = fields.ForeignKey("User", on_delete="cascade", related_name="tasks")
     list: fields.ForeignKey = fields.ForeignKey(
         "List",
         on_delete="cascade",
@@ -64,6 +66,7 @@ class Task(BaseModel):
 class ShoppingItem(BaseModel):
     """Shopping item model for shopping lists"""
     
+    user = fields.ForeignKey("User", on_delete="cascade", related_name="shopping_items")
     list: fields.ForeignKey = fields.ForeignKey(
         "List",
         on_delete="cascade",

@@ -18,30 +18,34 @@ class ListService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def get_all_lists(self) -> ListType[List]:
-        """Get all lists ordered by creation date"""
-        return await List.query.all().order_by("-created_at")
+    async def get_all_lists(self, user_id: UUID) -> ListType[List]:
+        """Get all lists for a specific user ordered by creation date"""
+        return await List.query.filter(user=user_id).all().order_by("-created_at")
     
-    async def get_list_by_id(self, list_id: UUID) -> List:
-        """Get a list by ID"""
-        list_obj = await List.query.get(id=list_id)
+    async def get_list_by_id(self, list_id: UUID, user_id: UUID) -> List:
+        """Get a list by ID for a specific user"""
+        list_obj = await List.query.filter(id=list_id, user=user_id).first()
         if not list_obj:
             raise ObjectNotFound("List not found")
         return list_obj
     
-    async def create_list(self, list_data: ListCreate) -> List:
-        """Create a new list"""
-        return await List.query.create(**list_data.model_dump())
+    async def create_list(self, list_data: ListCreate, user_id: UUID) -> List:
+        """Create a new list for a specific user"""
+        data = list_data.model_dump()
+        data['user'] = user_id
+        return await List.query.create(**data)
     
-    async def update_list(self, list_id: UUID, list_data: ListUpdate) -> List:
-        """Update a list"""
-        list_obj = await self.get_list_by_id(list_id)
+    async def update_list(self, list_id: UUID, list_data: ListUpdate, user_id: UUID) -> List:
+        """Update a list for a specific user"""
+        list_obj = await self.get_list_by_id(list_id, user_id)
         update_data = {k: v for k, v in list_data.model_dump().items() if v is not None}
-        return await list_obj.update(**update_data)
+        await list_obj.update(**update_data)
+        # Reload the list to ensure user relation is loaded
+        return await self.get_list_by_id(list_id, user_id)
     
-    async def delete_list(self, list_id: UUID) -> bool:
-        """Delete a list and all its items"""
-        list_obj = await self.get_list_by_id(list_id)
+    async def delete_list(self, list_id: UUID, user_id: UUID) -> bool:
+        """Delete a list and all its items for a specific user"""
+        list_obj = await self.get_list_by_id(list_id, user_id)
         await list_obj.delete()
         return True
 
@@ -52,75 +56,52 @@ class TaskService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def get_tasks_by_list(self, list_id: UUID) -> ListType[Task]:
-        """Get all tasks for a list ordered by position"""
-        return await Task.query.filter(list=list_id).order_by("position")
+    async def get_tasks_by_list(self, list_id: UUID, user_id: UUID) -> ListType[Task]:
+        """Get all tasks for a specific list and user"""
+        return await Task.query.filter(list=list_id, user=user_id).all().order_by("position")
     
-    async def get_task_by_id(self, task_id: UUID) -> Task:
-        """Get a task by ID"""
-        task = await Task.query.get(id=task_id)
+    async def get_task_by_id(self, task_id: UUID, user_id: UUID) -> Task:
+        """Get a task by ID for a specific user"""
+        task = await Task.query.filter(id=task_id, user=user_id).first()
         if not task:
             raise ObjectNotFound("Task not found")
         return task
     
-    async def create_task(self, list_id: UUID, task_data: TaskCreate) -> Task:
-        """Create a new task in a list"""
-        # Get the highest position in the list
-        tasks = await Task.query.filter(list=list_id).order_by("-position").limit(1)
-        max_position = tasks[0].position if tasks else 0
-        task_data_dict = task_data.model_dump()
-        task_data_dict["position"] = max_position + 1
-        task_data_dict["list"] = list_id
-        
-        return await Task.query.create(**task_data_dict)
+    async def create_task(self, task_data: dict, user_id: UUID, list_id: UUID) -> Task:
+        data = dict(task_data)
+        data['user'] = user_id
+        data['list'] = list_id
+        return await Task.query.create(**data)
     
-    async def update_task(self, task_id: UUID, task_data: TaskUpdate, list_id: UUID = None) -> Task:
-        """Update a task and ensure the returned object has a valid list reference for serialization."""
-        task = await self.get_task_by_id(task_id)
+    async def update_task(self, task_id: UUID, task_data: TaskUpdate, user_id: UUID) -> Task:
+        """Update a task for a specific user"""
+        task = await self.get_task_by_id(task_id, user_id)
         update_data = {k: v for k, v in task_data.model_dump().items() if v is not None}
-        updated_task = await task.update(**update_data)
-        # Patch: ensure the returned object has a valid list or list_id
-        if not getattr(updated_task, 'list', None):
-            # If the ORM expects a foreign key relation, set it
-            if list_id:
-                updated_task.list = list_id
-            elif task_data.list_id:
-                updated_task.list = task_data.list_id
-        return updated_task
+        return await task.update(**update_data)
     
-    async def delete_task(self, task_id: UUID) -> bool:
-        """Delete a task"""
-        task = await self.get_task_by_id(task_id)
+    async def delete_task(self, task_id: UUID, user_id: UUID) -> bool:
+        """Delete a task for a specific user"""
+        task = await self.get_task_by_id(task_id, user_id)
         await task.delete()
         return True
     
-    async def toggle_task(self, task_id: UUID) -> Task:
-        """Toggle task completion status"""
-        task = await self.get_task_by_id(task_id)
-        return await task.update(checked=not task.checked)
+    async def toggle_task(self, task_id: UUID, user_id: UUID) -> Task:
+        """Toggle task completion status for a specific user"""
+        task = await self.get_task_by_id(task_id, user_id)
+        task.checked = not task.checked
+        return await task.save()
     
-    async def reorder_tasks(self, list_id: UUID, item_ids: ListType[UUID]) -> ListType[Task]:
-        """Reorder tasks by updating their positions"""
-        tasks = []
-        for position, task_id in enumerate(item_ids, 1):
-            task = await self.get_task_by_id(task_id)
-            # Compare the task's list foreign key value with the provided list_id
-            # In Edgy ORM, the ForeignKey 'list' field contains a List object, not just a UUID
-            task_list_obj = getattr(task, 'list', None)
-            
-            # Extract the actual list ID from the List object
-            if hasattr(task_list_obj, 'id'):
-                # If task_list_obj is a List object with an id field
-                actual_list_id = task_list_obj.id
-            else:
-                # If it's already a UUID (shouldn't happen based on Edgy ORM behavior)
-                actual_list_id = task_list_obj
-                
-            if actual_list_id != list_id:
-                raise ValueError("Task does not belong to the specified list")
-            updated_task = await task.update(position=position)
-            tasks.append(updated_task)
-        return tasks
+    async def reorder_tasks(self, list_id: UUID, reorder_data: ReorderRequest, user_id: UUID) -> ListType[Task]:
+        """Reorder tasks in a list for a specific user"""
+        tasks = await self.get_tasks_by_list(list_id, user_id)
+        task_dict = {str(task.id): task for task in tasks}
+        
+        for item in reorder_data.items:
+            if str(item.id) in task_dict:
+                task_dict[str(item.id)].position = item.position
+                await task_dict[str(item.id)].save()
+        
+        return await self.get_tasks_by_list(list_id, user_id)
 
 
 class ShoppingItemService:
@@ -129,74 +110,52 @@ class ShoppingItemService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def get_items_by_list(self, list_id: UUID) -> ListType[ShoppingItem]:
-        """Get all shopping items for a list ordered by position"""
-        return await ShoppingItem.query.filter(list=list_id).order_by("position")
+    async def get_items_by_list(self, list_id: UUID, user_id: UUID) -> ListType[ShoppingItem]:
+        """Get all shopping items for a specific list and user"""
+        return await ShoppingItem.query.filter(list=list_id, user=user_id).all().order_by("position")
     
-    async def get_item_by_id(self, item_id: UUID) -> ShoppingItem:
-        """Get a shopping item by ID"""
-        item = await ShoppingItem.query.get(id=item_id)
+    async def get_item_by_id(self, item_id: UUID, user_id: UUID) -> ShoppingItem:
+        """Get a shopping item by ID for a specific user"""
+        item = await ShoppingItem.query.filter(id=item_id, user=user_id).first()
         if not item:
             raise ObjectNotFound("Shopping item not found")
         return item
     
-    async def create_item(self, list_id: UUID, item_data: ShoppingItemCreate) -> ShoppingItem:
-        """Create a new shopping item in a list"""
-        # Get the highest position in the list
-        items = await ShoppingItem.query.filter(list=list_id).order_by("-position").limit(1)
-        max_position = items[0].position if items else 0
-        item_data_dict = item_data.model_dump()
-        item_data_dict["position"] = max_position + 1
-        item_data_dict["list"] = list_id
-        
-        return await ShoppingItem.query.create(**item_data_dict)
+    async def create_item(self, item_data: dict, user_id: UUID, list_id: UUID) -> ShoppingItem:
+        data = dict(item_data)
+        data['user'] = user_id
+        data['list'] = list_id
+        return await ShoppingItem.query.create(**data)
     
-    async def update_item(self, item_id: UUID, item_data: ShoppingItemUpdate, list_id: UUID = None) -> ShoppingItem:
-        """Update a shopping item and ensure the returned object has a valid list reference for serialization."""
-        item = await self.get_item_by_id(item_id)
+    async def update_item(self, item_id: UUID, item_data: ShoppingItemUpdate, user_id: UUID) -> ShoppingItem:
+        """Update a shopping item for a specific user"""
+        item = await self.get_item_by_id(item_id, user_id)
         update_data = {k: v for k, v in item_data.model_dump().items() if v is not None}
-        updated_item = await item.update(**update_data)
-        # Patch: ensure the returned object has a valid list or list_id
-        if not getattr(updated_item, 'list', None):
-            if list_id:
-                updated_item.list = list_id
-            elif item_data.list_id:
-                updated_item.list = item_data.list_id
-        return updated_item
+        return await item.update(**update_data)
     
-    async def delete_item(self, item_id: UUID) -> bool:
-        """Delete a shopping item"""
-        item = await self.get_item_by_id(item_id)
+    async def delete_item(self, item_id: UUID, user_id: UUID) -> bool:
+        """Delete a shopping item for a specific user"""
+        item = await self.get_item_by_id(item_id, user_id)
         await item.delete()
         return True
     
-    async def toggle_item(self, item_id: UUID) -> ShoppingItem:
-        """Toggle shopping item completion status"""
-        item = await self.get_item_by_id(item_id)
-        return await item.update(checked=not item.checked)
+    async def toggle_item(self, item_id: UUID, user_id: UUID) -> ShoppingItem:
+        """Toggle shopping item completion status for a specific user"""
+        item = await self.get_item_by_id(item_id, user_id)
+        item.checked = not item.checked
+        return await item.save()
     
-    async def reorder_items(self, list_id: UUID, item_ids: ListType[UUID]) -> ListType[ShoppingItem]:
-        """Reorder shopping items by updating their positions"""
-        items = []
-        for position, item_id in enumerate(item_ids, 1):
-            item = await self.get_item_by_id(item_id)
-            # Compare the item's list foreign key value with the provided list_id
-            # In Edgy ORM, the ForeignKey 'list' field contains a List object, not just a UUID
-            item_list_obj = getattr(item, 'list', None)
-            
-            # Extract the actual list ID from the List object
-            if hasattr(item_list_obj, 'id'):
-                # If item_list_obj is a List object with an id field
-                actual_list_id = item_list_obj.id
-            else:
-                # If it's already a UUID (shouldn't happen based on Edgy ORM behavior)
-                actual_list_id = item_list_obj
-                
-            if actual_list_id != list_id:
-                raise ValueError("Shopping item does not belong to the specified list")
-            updated_item = await item.update(position=position)
-            items.append(updated_item)
-        return items
+    async def reorder_items(self, list_id: UUID, reorder_data: ReorderRequest, user_id: UUID) -> ListType[ShoppingItem]:
+        """Reorder shopping items in a list for a specific user"""
+        items = await self.get_items_by_list(list_id, user_id)
+        item_dict = {str(item.id): item for item in items}
+        
+        for item in reorder_data.items:
+            if str(item.id) in item_dict:
+                item_dict[str(item.id)].position = item.position
+                await item_dict[str(item.id)].save()
+        
+        return await self.get_items_by_list(list_id, user_id)
 
 
 class SearchService:
@@ -205,16 +164,25 @@ class SearchService:
     def __init__(self, database: Database):
         self.database = database
     
-    async def search_all(self, query: str) -> dict:
-        """Search across all lists, tasks, and shopping items"""
+    async def search_all(self, query: str, user_id: UUID) -> dict:
+        """Search across all user content"""
         # Search in lists
-        lists = await List.query.filter(title__icontains=query).all()
+        lists = await List.query.filter(
+            user=user_id,
+            title__icontains=query
+        ).all()
         
         # Search in tasks
-        tasks = await Task.query.filter(title__icontains=query).all()
+        tasks = await Task.query.filter(
+            user=user_id,
+            title__icontains=query
+        ).all()
         
         # Search in shopping items
-        shopping_items = await ShoppingItem.query.filter(title__icontains=query).all()
+        shopping_items = await ShoppingItem.query.filter(
+            user=user_id,
+            title__icontains=query
+        ).all()
         
         return {
             "lists": lists,

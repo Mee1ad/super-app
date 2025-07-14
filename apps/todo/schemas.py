@@ -36,10 +36,24 @@ class ListUpdate(BaseModel):
 
 class ListResponse(ListBase):
     id: UUID = Field(..., description="Unique identifier for the list")
+    user_id: UUID = Field(..., description="ID of the user who owns the list")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @classmethod
+    def model_validate_from_orm(cls, obj):
+        data = {}
+        for field_name in cls.model_fields.keys():
+            if field_name == 'user_id':
+                if hasattr(obj, 'user') and obj.user:
+                    data['user_id'] = getattr(obj.user, 'id', obj.user)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
+            elif hasattr(obj, field_name):
+                data[field_name] = getattr(obj, field_name)
+        return cls.model_validate(data)
 
 
 # Task Schemas
@@ -67,31 +81,28 @@ class TaskUpdate(BaseModel):
 class TaskResponse(TaskBase):
     id: UUID = Field(..., description="Unique identifier for the task")
     list_id: Optional[UUID] = Field(None, description="ID of the parent list")
+    user_id: UUID = Field(..., description="ID of the user who owns the task")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-    
+
     @classmethod
     def model_validate_from_orm(cls, obj):
-        """Extract data from Edgy ORM model with proper list_id handling"""
-        # Build data dict from object attributes
         data = {}
         for field_name in cls.model_fields.keys():
             if field_name == 'list_id':
-                # Special handling for list_id - extract UUID from ForeignKey field
-                if hasattr(obj, 'list'):
-                    list_value = getattr(obj, 'list')
-                    # If list_value is a List object, get its id; otherwise it should be a UUID
-                    if hasattr(list_value, 'id'):
-                        data['list_id'] = list_value.id
-                    else:
-                        data['list_id'] = list_value
+                if hasattr(obj, 'list') and obj.list:
+                    data['list_id'] = getattr(obj.list, 'id', obj.list)
                 elif hasattr(obj, 'list_id'):
                     data['list_id'] = getattr(obj, 'list_id')
+            elif field_name == 'user_id':
+                if hasattr(obj, 'user') and obj.user:
+                    data['user_id'] = getattr(obj.user, 'id', obj.user)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
             elif hasattr(obj, field_name):
                 data[field_name] = getattr(obj, field_name)
-            
         return cls.model_validate(data)
 
 
@@ -124,31 +135,28 @@ class ShoppingItemUpdate(BaseModel):
 class ShoppingItemResponse(ShoppingItemBase):
     id: UUID = Field(..., description="Unique identifier for the shopping item")
     list_id: Optional[UUID] = Field(None, description="ID of the parent list")
+    user_id: UUID = Field(..., description="ID of the user who owns the item")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-    
+
     @classmethod
     def model_validate_from_orm(cls, obj):
-        """Extract data from Edgy ORM model with proper list_id handling"""
-        # Build data dict from object attributes
         data = {}
         for field_name in cls.model_fields.keys():
             if field_name == 'list_id':
-                # Special handling for list_id - extract UUID from ForeignKey field
-                if hasattr(obj, 'list'):
-                    list_value = getattr(obj, 'list')
-                    # If list_value is a List object, get its id; otherwise it should be a UUID
-                    if hasattr(list_value, 'id'):
-                        data['list_id'] = list_value.id
-                    else:
-                        data['list_id'] = list_value
+                if hasattr(obj, 'list') and obj.list:
+                    data['list_id'] = getattr(obj.list, 'id', obj.list)
                 elif hasattr(obj, 'list_id'):
                     data['list_id'] = getattr(obj, 'list_id')
+            elif field_name == 'user_id':
+                if hasattr(obj, 'user') and obj.user:
+                    data['user_id'] = getattr(obj.user, 'id', obj.user)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
             elif hasattr(obj, field_name):
                 data[field_name] = getattr(obj, field_name)
-            
         return cls.model_validate(data)
 
 

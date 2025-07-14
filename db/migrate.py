@@ -120,6 +120,7 @@ async def run_migrations():
         # Define migrations to run
         migrations = [
             "001_initial_schema",  # Initial table creation
+            "002_add_user_id_to_tables", # Add user_id to existing tables
             # Add future migrations here
         ]
         
@@ -151,8 +152,43 @@ async def apply_migration(migration_name):
         # This migration is handled by create_tables()
         # It's already done when we create the tables
         pass
+    elif migration_name == "002_add_user_id_to_tables":
+        # Add user_id column to existing tables and populate with existing user
+        existing_user_id = "baef3864-47f9-49c8-93a8-67ffa673d39d"
+        
+        # Add user_id column to lists table
+        await database.execute("ALTER TABLE lists ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;")
+        await database.execute(f"UPDATE lists SET user_id = '{existing_user_id}' WHERE user_id IS NULL;")
+        await database.execute("ALTER TABLE lists ALTER COLUMN user_id SET NOT NULL;")
+        
+        # Add user_id column to tasks table
+        await database.execute("ALTER TABLE tasks ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;")
+        await database.execute(f"UPDATE tasks SET user_id = '{existing_user_id}' WHERE user_id IS NULL;")
+        await database.execute("ALTER TABLE tasks ALTER COLUMN user_id SET NOT NULL;")
+        
+        # Add user_id column to shopping_items table
+        await database.execute("ALTER TABLE shopping_items ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;")
+        await database.execute(f"UPDATE shopping_items SET user_id = '{existing_user_id}' WHERE user_id IS NULL;")
+        await database.execute("ALTER TABLE shopping_items ALTER COLUMN user_id SET NOT NULL;")
+        
+        # Add user_id column to ideas table
+        await database.execute("ALTER TABLE ideas ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;")
+        await database.execute(f"UPDATE ideas SET user_id = '{existing_user_id}' WHERE user_id IS NULL;")
+        await database.execute("ALTER TABLE ideas ALTER COLUMN user_id SET NOT NULL;")
+        
+        # Add user_id column to diary_entries table
+        await database.execute("ALTER TABLE diary_entries ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;")
+        await database.execute(f"UPDATE diary_entries SET user_id = '{existing_user_id}' WHERE user_id IS NULL;")
+        await database.execute("ALTER TABLE diary_entries ALTER COLUMN user_id SET NOT NULL;")
+        
+        # Add user_id column to food_entries table
+        await database.execute("ALTER TABLE food_entries ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;")
+        await database.execute(f"UPDATE food_entries SET user_id = '{existing_user_id}' WHERE user_id IS NULL;")
+        await database.execute("ALTER TABLE food_entries ALTER COLUMN user_id SET NOT NULL;")
+        
+        logger.info(f"✅ Migration {migration_name} completed - Added user_id to all tables")
     # Add more migrations here as needed
-    # elif migration_name == "002_add_new_column":
+    # elif migration_name == "003_add_new_column":
     #     await database.execute("ALTER TABLE lists ADD COLUMN new_column TEXT;")
 
 async def verify_database():

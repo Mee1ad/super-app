@@ -25,6 +25,7 @@ class Category(Model):
 class Idea(BaseModel):
     """Idea model for storing user ideas"""
     
+    user = fields.ForeignKey("User", on_delete="cascade", related_name="ideas")
     title = fields.CharField(max_length=255)
     description = fields.TextField(null=True, blank=True)
     category = fields.ForeignKey(
