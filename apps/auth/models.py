@@ -1,11 +1,12 @@
-from typing import Optional
+from typing import Optional, ClassVar
 from uuid import uuid4
-from edgy import Model, fields
+from edgy import Model, fields, Manager
 from db.session import models_registry
 from db.base import BaseModel
 
 class User(BaseModel):
     """User model for authentication"""
+    objects: ClassVar[Manager] = Manager()
     id = fields.UUIDField(primary_key=True, default=uuid4)
     email = fields.CharField(max_length=255, unique=True, index=True)
     name = fields.CharField(max_length=255)

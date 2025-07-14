@@ -1,15 +1,16 @@
-from typing import List, Optional
+from typing import Optional, ClassVar
 from uuid import UUID
 from datetime import date
-from edgy import Model, fields
+from edgy import Model, fields, Manager
 from db.base import BaseModel, utc_now
 from db.session import models_registry
 
-class Mood(Model):
+class Mood(BaseModel):
+    objects: ClassVar[Manager] = Manager()
     id = fields.CharField(primary_key=True, max_length=50)
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
-    color = fields.CharField(max_length=50)
+    color = fields.CharField(max_length=20)
     created_at = fields.DateTimeField(default=utc_now)
 
     class Meta:
@@ -17,12 +18,14 @@ class Mood(Model):
         registry = models_registry
 
 class DiaryEntry(BaseModel):
+    objects: ClassVar[Manager] = Manager()
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="diary_entries")
+    mood = fields.ForeignKey("Mood", on_delete="set_null", null=True, related_name="diary_entries")
     title = fields.CharField(max_length=255)
     content = fields.TextField()
-    mood = fields.ForeignKey("Mood", on_delete="cascade", related_name="entries")
-    date = fields.DateField(default=lambda: date.today())
-    images = fields.JSONField(default=list)
+    date = fields.DateField()
+    created_at = fields.DateTimeField(auto_now_add=True)
+    updated_at = fields.DateTimeField(auto_now=True)
     
     class Meta:
         tablename = "diary_entries"

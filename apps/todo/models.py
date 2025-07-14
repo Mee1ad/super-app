@@ -1,8 +1,8 @@
 # models for todo app 
-from typing import Optional
+from typing import Optional, ClassVar
 from enum import Enum
 
-from edgy import Model, fields
+from edgy import Model, fields, Manager
 
 from db.base import BaseModel
 from db.session import models_registry
@@ -21,6 +21,7 @@ class Variant(str, Enum):
 
 class List(BaseModel):
     """List model for organizing tasks and shopping items"""
+    objects: ClassVar[Manager] = Manager()
     
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="lists")
     type: fields.ChoiceField = fields.ChoiceField(
@@ -41,6 +42,7 @@ class List(BaseModel):
 
 class Task(BaseModel):
     """Task model for todo items"""
+    objects: ClassVar[Manager] = Manager()
     
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="tasks")
     list: fields.ForeignKey = fields.ForeignKey(
@@ -65,6 +67,7 @@ class Task(BaseModel):
 
 class ShoppingItem(BaseModel):
     """Shopping item model for shopping lists"""
+    objects: ClassVar[Manager] = Manager()
     
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="shopping_items")
     list: fields.ForeignKey = fields.ForeignKey(

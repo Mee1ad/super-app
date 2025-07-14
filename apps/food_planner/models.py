@@ -1,14 +1,15 @@
-from typing import List, Optional
+from typing import Optional, ClassVar
 from uuid import UUID
-from edgy import Model, fields
+from edgy import Model, fields, Manager
 from db.base import BaseModel, utc_now
 from db.session import models_registry
 
-class MealType(Model):
+class MealType(BaseModel):
+    objects: ClassVar[Manager] = Manager()
     id = fields.CharField(primary_key=True, max_length=50)
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
-    time = fields.CharField(max_length=5)  # HH:MM format
+    time = fields.CharField(max_length=10)
     created_at = fields.DateTimeField(default=utc_now)
 
     class Meta:
@@ -16,12 +17,14 @@ class MealType(Model):
         registry = models_registry
 
 class FoodEntry(BaseModel):
+    objects: ClassVar[Manager] = Manager()
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="food_entries")
-    name = fields.CharField(max_length=255)
-    category = fields.CharField(max_length=20)  # 'planned' or 'eaten'
-    meal_type = fields.ForeignKey("MealType", on_delete="cascade", related_name="food_entries")
-    time = fields.CharField(max_length=5)  # HH:MM format
-    date = fields.DateField(default=utc_now)
+    meal_type = fields.ForeignKey("MealType", on_delete="set_null", null=True, related_name="food_entries")
+    title = fields.CharField(max_length=255)
+    calories = fields.IntegerField(null=True)
+    date = fields.DateField()
+    created_at = fields.DateTimeField(auto_now_add=True)
+    updated_at = fields.DateTimeField(auto_now=True)
     comment = fields.TextField(null=True)
     image = fields.TextField(null=True)
     followed_plan = fields.BooleanField(null=True)

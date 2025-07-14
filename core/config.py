@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/auth/callback")
     
+    # DeepSeek AI Configuration
+    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
+    
     # Client Configuration
     client_url: str = os.getenv("CLIENT_URL", "http://localhost:3000")
     
