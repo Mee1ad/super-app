@@ -1,5 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
+from datetime import date
 from edgy import Model, fields
 from db.base import BaseModel, utc_now
 from db.session import models_registry
@@ -20,7 +21,7 @@ class DiaryEntry(BaseModel):
     title = fields.CharField(max_length=255)
     content = fields.TextField()
     mood = fields.ForeignKey("Mood", on_delete="cascade", related_name="entries")
-    date = fields.DateField(default=utc_now)
+    date = fields.DateField(default=lambda: date.today())
     images = fields.JSONField(default=list)
     
     class Meta:

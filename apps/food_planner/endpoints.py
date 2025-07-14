@@ -18,7 +18,6 @@ meal_type_service = MealTypeService(database)
 food_entry_service = FoodEntryService(database)
 
 @get(
-    path="/api/meal-types",
     tags=["Meal Types"],
     summary="Get all meal types",
     description="Retrieve all available meal types (breakfast, lunch, dinner, snack)."
@@ -28,7 +27,6 @@ async def get_meal_types() -> MealTypesResponse:
     return MealTypesResponse(meal_types=[MealTypeResponse.model_validate(meal_type) for meal_type in meal_types])
 
 @get(
-    path="/api/food-entries",
     tags=["Food Planner"],
     summary="Get all food entries",
     description="Retrieve all food entries for the authenticated user with optional search, filtering, and pagination."
@@ -63,7 +61,6 @@ async def get_food_entries(
     )
 
 @post(
-    path="/api/food-entries",
     tags=["Food Planner"],
     summary="Create a new food entry",
     description="Create a new food entry for the authenticated user with name, category, meal type, time, and optional details."
@@ -77,7 +74,6 @@ async def create_food_entry(request: Request, data: FoodEntryCreate) -> FoodEntr
         raise HTTPException(status_code=404, detail="Meal type not found")
 
 @get(
-    path="/api/food-entries/{entry_id:uuid}",
     tags=["Food Planner"],
     summary="Get a specific food entry",
     description="Retrieve a specific food entry by its ID for the authenticated user."
@@ -91,7 +87,6 @@ async def get_food_entry(request: Request, entry_id: UUID) -> FoodEntryResponse:
         raise HTTPException(status_code=404, detail="Food entry not found")
 
 @put(
-    path="/api/food-entries/{entry_id:uuid}",
     tags=["Food Planner"],
     summary="Update a food entry",
     description="Update an existing food entry's properties for the authenticated user. Only provided fields will be updated."
@@ -105,7 +100,6 @@ async def update_food_entry(request: Request, entry_id: UUID, data: FoodEntryUpd
         raise HTTPException(status_code=404, detail="Food entry or meal type not found")
 
 @delete(
-    path="/api/food-entries/{entry_id:uuid}",
     status_code=200,
     tags=["Food Planner"],
     summary="Delete a food entry",
@@ -120,7 +114,6 @@ async def delete_food_entry(request: Request, entry_id: UUID) -> dict:
         raise HTTPException(status_code=404, detail="Food entry not found")
 
 @get(
-    path="/api/food-entries/summary",
     tags=["Food Planner"],
     summary="Get food entries summary",
     description="Get summary statistics for food entries within a date range for the authenticated user."
@@ -135,7 +128,6 @@ async def get_food_summary(
     return FoodSummaryResponse(**summary)
 
 @get(
-    path="/api/food-entries/calendar",
     tags=["Food Planner"],
     summary="Get calendar data",
     description="Get daily summaries for calendar view within a date range for the authenticated user."
@@ -150,7 +142,6 @@ async def get_calendar_data(
     return CalendarResponse(days=calendar_data)
 
 @post(
-    path="/api/upload-food-image",
     tags=["Food Planner"],
     summary="Upload a food image",
     description="Upload an image for food entries and return its URL."

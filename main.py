@@ -1,24 +1,7 @@
 from esmerald import Esmerald, Gateway, get, CORSConfig, Include
 from core.config import settings
 from db.session import database
-from apps.todo.endpoints import (
-    get_lists, create_list, update_list, delete_list,
-    get_tasks, create_task, update_task, delete_task, toggle_task, reorder_tasks,
-    get_items, create_item, update_item, delete_item, toggle_item, reorder_items,
-    search
-)
-from apps.ideas.endpoints import (
-    get_categories, get_ideas, create_idea, get_idea, update_idea, delete_idea
-)
-from apps.diary.endpoints import (
-    get_moods, get_diary_entries, create_diary_entry, get_diary_entry, 
-    update_diary_entry, delete_diary_entry, upload_image
-)
-from apps.food_planner.endpoints import (
-    get_meal_types, get_food_entries, create_food_entry, get_food_entry,
-    update_food_entry, delete_food_entry, get_food_summary, get_calendar_data, upload_food_image
-)
-from apps.auth.endpoints import google_login, refresh_token, get_google_auth_url, google_callback
+from api.v1.api_v1 import v1_routes
 
 @get(
     path="/ping",
@@ -156,52 +139,9 @@ cors_config = CORSConfig(
 app = Esmerald(
     routes=[
         Gateway(handler=ping),
-        # Auth endpoints
-        Gateway(handler=google_login, path="/api/v1/auth"),
-        Gateway(handler=refresh_token, path="/api/v1/auth"),
-        Gateway(handler=get_google_auth_url, path="/api/v1/auth"),
-        Gateway(handler=google_callback, path="/api/v1/auth/google/callback"),
-        # Todo endpoints
-        Gateway(handler=get_lists),
-        Gateway(handler=create_list),
-        Gateway(handler=update_list),
-        Gateway(handler=delete_list),
-        Gateway(handler=get_tasks),
-        Gateway(handler=create_task),
-        Gateway(handler=update_task),
-        Gateway(handler=delete_task),
-        Gateway(handler=toggle_task),
-        Gateway(handler=reorder_tasks),
-        Gateway(handler=get_items),
-        Gateway(handler=create_item),
-        Gateway(handler=update_item),
-        Gateway(handler=delete_item),
-        Gateway(handler=toggle_item),
-        Gateway(handler=reorder_items),
-        Gateway(handler=search),
-        Gateway(handler=get_categories),
-        Gateway(handler=get_ideas),
-        Gateway(handler=create_idea),
-        Gateway(handler=get_idea),
-        Gateway(handler=update_idea),
-        Gateway(handler=delete_idea),
-        Gateway(handler=get_moods),
-        Gateway(handler=get_diary_entries),
-        Gateway(handler=create_diary_entry),
-        Gateway(handler=get_diary_entry),
-        Gateway(handler=update_diary_entry),
-        Gateway(handler=delete_diary_entry),
-        Gateway(handler=upload_image),
-        Gateway(handler=get_meal_types),
-        Gateway(handler=get_food_entries),
-        Gateway(handler=create_food_entry),
-        Gateway(handler=get_food_entry),
-        Gateway(handler=update_food_entry),
-        Gateway(handler=delete_food_entry),
-        Gateway(handler=get_food_summary),
-        Gateway(handler=get_calendar_data),
-        Gateway(handler=upload_food_image),
         Gateway(handler=deployment_info),
+        # V1 API routes - all under /api/v1/
+        Include(routes=v1_routes, path="/api/v1"),
     ],
     cors_config=cors_config,
     enable_openapi=True,
@@ -210,7 +150,7 @@ app = Esmerald(
     version="1.0.0",
     description="""# LifeHub API
 
-A comprehensive REST API for managing todo lists and shopping lists with JWT authentication, real-time search, and bulk operations.
+A comprehensive REST API for managing todo lists, ideas, diary entries, and food planning with JWT authentication, real-time search, and bulk operations.
 
 ## 📚 API Overview
 
@@ -218,6 +158,9 @@ This API provides comprehensive endpoints for:
 - Todo list management (CRUD operations)
 - Task management with ordering and toggling
 - Shopping list functionality
+- Ideas and categories management
+- Diary entries with mood tracking
+- Food planning and meal tracking
 - Real-time search capabilities
 - Bulk operations for efficiency
 
@@ -232,6 +175,7 @@ This API is deployed using Docker containers with automated CI/CD through GitHub
 - **URL**: `http://YOUR_SERVER_IP:8000`
 - **Health Check**: `GET /ping`
 - **Documentation**: `GET /openapi`
+- **API Base**: `GET /api/v1/`
 
 ### Deployment Architecture
 

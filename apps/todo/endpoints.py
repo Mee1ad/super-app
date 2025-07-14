@@ -27,7 +27,6 @@ search_service = SearchService(database)
 
 
 @get(
-    path="/api/lists",
     tags=["Lists"],
     summary="Get all lists",
     description="Retrieve all lists for the authenticated user. Supports pagination and filtering by type."
@@ -53,7 +52,6 @@ async def get_lists(request: Request) -> ListType[ListResponse]:
 
 
 @post(
-    path="/api/lists",
     tags=["Lists"],
     summary="Create a new list",
     description="Create a new list for the authenticated user."
@@ -82,7 +80,6 @@ async def create_list(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}",
     tags=["Lists"],
     summary="Update a list",
     description="Update an existing list for the authenticated user."
@@ -117,7 +114,6 @@ async def update_list(
 
 
 @delete(
-    path="/api/lists/{list_id:uuid}",
     tags=["Lists"],
     summary="Delete a list",
     description="Delete a list and all its items for the authenticated user.",
@@ -149,7 +145,6 @@ async def delete_list(
 
 
 @get(
-    path="/api/lists/{list_id:uuid}/tasks",
     tags=["Tasks"],
     summary="Get tasks for a list",
     description="Retrieve all tasks for a specific list belonging to the authenticated user."
@@ -181,7 +176,6 @@ async def get_tasks(
 
 
 @post(
-    path="/api/lists/{list_id:uuid}/tasks",
     tags=["Tasks"],
     summary="Create a new task",
     description="Create a new task in a list for the authenticated user."
@@ -202,7 +196,6 @@ async def create_task(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
     tags=["Tasks"],
     summary="Update a task",
     description="Update an existing task for the authenticated user."
@@ -239,7 +232,6 @@ async def update_task(
 
 
 @delete(
-    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
     tags=["Tasks"],
     summary="Delete a task",
     description="Delete a task for the authenticated user.",
@@ -273,7 +265,6 @@ async def delete_task(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}/toggle",
     tags=["Tasks"],
     summary="Toggle task completion",
     description="Toggle the completion status of a task for the authenticated user."
@@ -306,7 +297,6 @@ async def toggle_task(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}/tasks/reorder",
     tags=["Tasks"],
     summary="Reorder tasks",
     description="Reorder tasks in a list for the authenticated user."
@@ -325,7 +315,6 @@ async def reorder_tasks(
 
 
 @get(
-    path="/api/lists/{list_id:uuid}/items",
     tags=["Shopping Items"],
     summary="Get shopping items for a list",
     description="Retrieve all shopping items for a specific list belonging to the authenticated user."
@@ -357,7 +346,6 @@ async def get_items(
 
 
 @post(
-    path="/api/lists/{list_id:uuid}/items",
     tags=["Shopping Items"],
     summary="Create a new shopping item",
     description="Create a new shopping item in a list for the authenticated user."
@@ -378,7 +366,6 @@ async def create_item(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
     tags=["Shopping Items"],
     summary="Update a shopping item",
     description="Update an existing shopping item for the authenticated user."
@@ -415,7 +402,6 @@ async def update_item(
 
 
 @delete(
-    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
     tags=["Shopping Items"],
     summary="Delete a shopping item",
     description="Delete a shopping item for the authenticated user.",
@@ -449,7 +435,6 @@ async def delete_item(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}/toggle",
     tags=["Shopping Items"],
     summary="Toggle shopping item completion",
     description="Toggle the completion status of a shopping item for the authenticated user."
@@ -482,7 +467,6 @@ async def toggle_item(
 
 
 @put(
-    path="/api/lists/{list_id:uuid}/items/reorder",
     tags=["Shopping Items"],
     summary="Reorder shopping items",
     description="Reorder shopping items in a list for the authenticated user."
@@ -501,7 +485,6 @@ async def reorder_items(
 
 
 @get(
-    path="/api/search",
     tags=["Search"],
     summary="Search across all content",
     description="Search for lists, tasks, and shopping items across all user content. Minimum 2 characters required."
@@ -539,7 +522,6 @@ async def search(
     )
 
 @get(
-    path="/api/health",
     tags=["Health"],
     summary="Health check",
     description="Check the health status of the API service."

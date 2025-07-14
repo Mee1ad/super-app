@@ -21,7 +21,6 @@ idea_service = IdeaService(database)
 
 
 @get(
-    path="/api/categories",
     tags=["Categories"],
     summary="Get all categories",
     description="Retrieve all available categories for organizing ideas."
@@ -47,7 +46,6 @@ async def get_categories() -> CategoriesResponse:
 
 
 @get(
-    path="/api/ideas",
     tags=["Ideas"],
     summary="Get all ideas",
     description="Retrieve all ideas for the authenticated user with optional search and category filtering. Supports pagination."
@@ -111,7 +109,6 @@ async def get_ideas(
 
 
 @post(
-    path="/api/ideas",
     tags=["Ideas"],
     summary="Create a new idea",
     description="Create a new idea for the authenticated user with title, description, category, and optional tags."
@@ -145,7 +142,6 @@ async def create_idea(request: Request, data: IdeaCreate) -> IdeaResponse:
 
 
 @get(
-    path="/api/ideas/{idea_id:uuid}",
     tags=["Ideas"],
     summary="Get a specific idea",
     description="Retrieve a specific idea by its ID for the authenticated user."
@@ -177,7 +173,6 @@ async def get_idea(request: Request, idea_id: UUID) -> IdeaResponse:
 
 
 @put(
-    path="/api/ideas/{idea_id:uuid}",
     tags=["Ideas"],
     summary="Update an idea",
     description="Update an existing idea's properties for the authenticated user. Only provided fields will be updated."
@@ -212,7 +207,6 @@ async def update_idea(request: Request, idea_id: UUID, data: IdeaUpdate) -> Idea
 
 
 @delete(
-    path="/api/ideas/{idea_id:uuid}",
     status_code=200,
     tags=["Ideas"],
     summary="Delete an idea",

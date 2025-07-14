@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date as date_type
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, Field, ConfigDict
@@ -20,7 +20,7 @@ class DiaryEntryBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(...)
     mood: str = Field(..., description="Mood ID for the entry")
-    date: Optional[date] = None
+    date: Optional[date_type] = Field(None, description="Date for the diary entry")
     images: List[str] = Field(default_factory=list)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -31,7 +31,7 @@ class DiaryEntryUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = Field(None)
     mood: Optional[str] = Field(None)
-    date: Optional[date] = None
+    date: Optional[date_type] = Field(None, description="Date for the diary entry")
     images: Optional[List[str]] = Field(None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

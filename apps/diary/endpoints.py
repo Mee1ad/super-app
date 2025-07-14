@@ -16,7 +16,6 @@ mood_service = MoodService(database)
 diary_service = DiaryService(database)
 
 @get(
-    path="/api/moods",
     tags=["Moods"],
     summary="Get all moods",
     description="Retrieve all available moods."
@@ -26,7 +25,6 @@ async def get_moods() -> MoodsResponse:
     return MoodsResponse(moods=[MoodResponse.model_validate(mood) for mood in moods])
 
 @get(
-    path="/api/diary-entries",
     tags=["Diary"],
     summary="Get all diary entries",
     description="Retrieve all diary entries for the authenticated user with optional search and mood filtering. Supports pagination."
@@ -51,7 +49,6 @@ async def get_diary_entries(
     )
 
 @post(
-    path="/api/diary-entries",
     tags=["Diary"],
     summary="Create a new diary entry",
     description="Create a new diary entry for the authenticated user with title, content, mood, and optional images."
@@ -65,7 +62,6 @@ async def create_diary_entry(request: Request, data: DiaryEntryCreate) -> DiaryE
         raise HTTPException(status_code=404, detail="Mood not found")
 
 @get(
-    path="/api/diary-entries/{entry_id:uuid}",
     tags=["Diary"],
     summary="Get a specific diary entry",
     description="Retrieve a specific diary entry by its ID for the authenticated user."
@@ -79,7 +75,6 @@ async def get_diary_entry(request: Request, entry_id: UUID) -> DiaryEntryRespons
         raise HTTPException(status_code=404, detail="Diary entry not found")
 
 @put(
-    path="/api/diary-entries/{entry_id:uuid}",
     tags=["Diary"],
     summary="Update a diary entry",
     description="Update an existing diary entry's properties for the authenticated user. Only provided fields will be updated."
@@ -93,7 +88,6 @@ async def update_diary_entry(request: Request, entry_id: UUID, data: DiaryEntryU
         raise HTTPException(status_code=404, detail="Diary entry or mood not found")
 
 @delete(
-    path="/api/diary-entries/{entry_id:uuid}",
     status_code=200,
     tags=["Diary"],
     summary="Delete a diary entry",
@@ -108,7 +102,6 @@ async def delete_diary_entry(request: Request, entry_id: UUID) -> dict:
         raise HTTPException(status_code=404, detail="Diary entry not found")
 
 @post(
-    path="/api/upload-image",
     tags=["Diary"],
     summary="Upload an image",
     description="Upload an image and return its URL. (Stub implementation)"
