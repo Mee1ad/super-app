@@ -13,7 +13,7 @@ class MealTypeService:
     async def get_all_meal_types(self) -> List[MealType]:
         return await MealType.query.all().order_by("name")
 
-    async def get_meal_type_by_id(self, meal_type_id: str) -> MealType:
+    async def get_meal_type_by_id(self, meal_type_id: UUID) -> MealType:
         meal_type = await MealType.query.get(id=meal_type_id)
         if not meal_type:
             raise ObjectNotFound("Meal type not found")
@@ -31,7 +31,7 @@ class FoodEntryService:
         user_id: UUID,
         search: Optional[str] = None,
         category: Optional[str] = None,
-        meal_type: Optional[str] = None,
+        meal_type: Optional[UUID] = None,
         date_filter: Optional[date] = None,
         page: int = 1,
         limit: int = 20

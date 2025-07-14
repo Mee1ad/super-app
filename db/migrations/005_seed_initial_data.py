@@ -51,14 +51,14 @@ class SeedInitialDataMigration(Migration):
         
         # Seed meal types
         meal_types = [
-            ("breakfast", "Morning meal"),
-            ("lunch", "Midday meal"),
-            ("dinner", "Evening meal"),
-            ("snack", "Light snack"),
-            ("dessert", "Sweet treat")
+            ("breakfast", "🌅", "08:00", "Morning meal"),
+            ("lunch", "🍕", "12:00", "Midday meal"),
+            ("dinner", "🍽️", "18:00", "Evening meal"),
+            ("snack", "☕", "15:00", "Light snack"),
+            ("dessert", "🍰", "20:00", "Sweet treat")
         ]
         
-        for meal_name, meal_description in meal_types:
+        for meal_name, meal_emoji, meal_time, meal_description in meal_types:
             existing_meal = await database.fetch_one(
                 "SELECT id FROM meal_types WHERE name = :name",
                 {"name": meal_name}
@@ -66,10 +66,12 @@ class SeedInitialDataMigration(Migration):
             
             if not existing_meal:
                 await database.execute("""
-                    INSERT INTO meal_types (name, description)
-                    VALUES (:name, :description)
+                    INSERT INTO meal_types (name, emoji, time, description)
+                    VALUES (:name, :emoji, :time, :description)
                 """, {
                     "name": meal_name,
+                    "emoji": meal_emoji,
+                    "time": meal_time,
                     "description": meal_description
                 })
     

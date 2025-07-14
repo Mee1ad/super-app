@@ -9,17 +9,17 @@ class MealTypeBase(BaseModel):
     time: str = Field(..., pattern=r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')  # HH:MM format
 
 class MealTypeCreate(MealTypeBase):
-    id: str = Field(..., min_length=1, max_length=50)
+    id: UUID
 
 class MealTypeResponse(MealTypeBase):
-    id: str
+    id: UUID
     created_at: datetime
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 
 class FoodEntryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     category: str = Field(..., pattern=r'^(planned|eaten)$')
-    meal_type_id: str = Field(..., min_length=1, max_length=50)
+    meal_type_id: UUID
     time: str = Field(..., pattern=r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')  # HH:MM format
     date: date_type
     comment: Optional[str] = Field(None)
@@ -34,7 +34,7 @@ class FoodEntryCreate(FoodEntryBase):
 class FoodEntryUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None, pattern=r'^(planned|eaten)$')
-    meal_type_id: Optional[str] = Field(None, min_length=1, max_length=50)
+    meal_type_id: Optional[UUID] = Field(None)
     time: Optional[str] = Field(None, pattern=r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')
     date: Optional[date_type] = Field(None)
     comment: Optional[str] = Field(None)
