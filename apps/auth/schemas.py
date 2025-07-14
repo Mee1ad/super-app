@@ -12,10 +12,10 @@ class UserResponse(BaseModel):
     """User information response"""
     id: str
     email: str
-    name: str
-    picture: Optional[str] = None
+    username: str
     is_active: bool
-    is_verified: bool
+    is_superuser: bool
+    role_name: Optional[str] = None
 
 class GoogleAuthRequest(BaseModel):
     """Google OAuth authorization code request"""

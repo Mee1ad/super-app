@@ -1,20 +1,54 @@
 from typing import Optional, ClassVar
-from uuid import uuid4
+from datetime import datetime
 from edgy import Model, fields, Manager
-from db.session import models_registry
+
 from db.base import BaseModel
+from db.session import models_registry
+
+
+class Role(BaseModel):
+    """Model for user roles"""
+    objects: ClassVar[Manager] = Manager()
+    
+    name = fields.CharField(max_length=50, unique=True)
+    description = fields.TextField(null=True)
+    permissions = fields.JSONField(default=dict)  # Store permissions as JSON
+    
+    class Meta:
+        tablename = "roles"
+        registry = models_registry
+
 
 class User(BaseModel):
-    """User model for authentication"""
+    """User model with role-based access control"""
     objects: ClassVar[Manager] = Manager()
-    id = fields.UUIDField(primary_key=True, default=uuid4)
-    email = fields.CharField(max_length=255, unique=True, index=True)
-    name = fields.CharField(max_length=255)
-    picture = fields.CharField(max_length=500, null=True)
-    google_id = fields.CharField(max_length=255, unique=True, null=True, index=True)
+    
+    email = fields.EmailField(unique=True, max_length=255)
+    username = fields.CharField(max_length=255, unique=True)
+    hashed_password = fields.CharField(max_length=255)
     is_active = fields.BooleanField(default=True)
-    is_verified = fields.BooleanField(default=False)
+    is_superuser = fields.BooleanField(default=False)
+    role = fields.ForeignKey("Role", on_delete="SET NULL", null=True, related_name="users")
+    created_at = fields.DateTimeField(auto_now_add=True)
+    updated_at = fields.DateTimeField(auto_now=True)
     
     class Meta:
         tablename = "users"
-        registry = models_registry 
+        registry = models_registry
+    
+    def has_permission(self, permission: str) -> bool:
+        """Check if user has a specific permission"""
+        if self.is_superuser:
+            return True
+        
+        if not self.role or not self.role.permissions:
+            return False
+        
+        return permission in self.role.permissions
+    
+    def has_role(self, role_name: str) -> bool:
+        """Check if user has a specific role"""
+        if self.is_superuser:
+            return True
+        
+        return self.role and self.role.name == role_name 

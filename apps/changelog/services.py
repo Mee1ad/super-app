@@ -343,6 +343,7 @@ class ChangelogService:
     def __init__(self):
         self.git_service = GitService()
         self.deepseek_service = DeepSeekService()
+        self.logger = logging.getLogger("ChangelogService")
     
     async def process_new_commits(self) -> int:
         """Process new commits and create changelog entries"""
@@ -405,10 +406,15 @@ class ChangelogService:
         page: int = 1,
         per_page: int = 20,
         version: Optional[str] = None,
-        change_type: Optional[ChangeType] = None
+        change_type: Optional[ChangeType] = None,
+        include_drafts: bool = False
     ) -> Tuple[List[ChangelogEntry], int]:
         """Get paginated changelog entries"""
         query = ChangelogEntry.objects.all()
+        
+        # Filter by published status unless drafts are requested
+        if not include_drafts:
+            query = query.filter(is_published=True)
         
         if version:
             query = query.filter(version=version)
@@ -502,4 +508,70 @@ class ChangelogService:
             "breaking_changes": breaking_changes,
             "changes_by_type": changes_by_type,
             "entries": entries
-        } 
+        }
+    
+    async def publish_changelog_entry(self, entry_id: str, user_id: str) -> bool:
+        """Publish a changelog entry"""
+        try:
+            from apps.auth.models import User
+            
+            # Get the entry
+            entry = await ChangelogEntry.objects.get(id=entry_id)
+            
+            # Get the user
+            user = await User.objects.get(id=user_id)
+            
+            # Update entry
+            entry.is_published = True
+            entry.published_by = user
+            entry.published_at = datetime.now(timezone.utc)
+            await entry.save()
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to publish changelog entry: {e}")
+            return False
+    
+    async def unpublish_changelog_entry(self, entry_id: str) -> bool:
+        """Unpublish a changelog entry"""
+        try:
+            entry = await ChangelogEntry.objects.get(id=entry_id)
+            entry.is_published = False
+            entry.published_by = None
+            entry.published_at = None
+            await entry.save()
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to unpublish changelog entry: {e}")
+            return False
+    
+    async def delete_changelog_entry(self, entry_id: str) -> bool:
+        """Delete a changelog entry"""
+        try:
+            entry = await ChangelogEntry.objects.get(id=entry_id)
+            await entry.delete()
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to delete changelog entry: {e}")
+            return False
+    
+    async def update_changelog_entry(self, entry_id: str, **kwargs) -> bool:
+        """Update a changelog entry"""
+        try:
+            entry = await ChangelogEntry.objects.get(id=entry_id)
+            
+            # Update fields
+            for field, value in kwargs.items():
+                if hasattr(entry, field):
+                    setattr(entry, field, value)
+            
+            await entry.save()
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to update changelog entry: {e}")
+            return False 

@@ -6,7 +6,7 @@ from db.session import models_registry
 
 class MealType(BaseModel):
     objects: ClassVar[Manager] = Manager()
-    id = fields.CharField(primary_key=True, max_length=50)
+    id = fields.UUIDField(primary_key=True)
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
     time = fields.CharField(max_length=10)
@@ -19,7 +19,7 @@ class MealType(BaseModel):
 class FoodEntry(BaseModel):
     objects: ClassVar[Manager] = Manager()
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="food_entries")
-    meal_type = fields.ForeignKey("MealType", on_delete="set_null", null=True, related_name="food_entries")
+    meal_type = fields.ForeignKey("MealType", on_delete="SET NULL", null=True, related_name="food_entries")
     title = fields.CharField(max_length=255)
     calories = fields.IntegerField(null=True)
     date = fields.DateField()

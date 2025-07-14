@@ -34,6 +34,9 @@ class ChangelogEntry(BaseModel):
     commit_message = fields.TextField()
     is_breaking = fields.BooleanField(default=False)
     release_date = fields.DateTimeField()
+    is_published = fields.BooleanField(default=False)  # Draft/Published status
+    published_by = fields.ForeignKey("User", on_delete="SET NULL", null=True, related_name="published_changelogs")
+    published_at = fields.DateTimeField(null=True)
     
     class Meta:
         tablename = "changelog_entries"

@@ -29,6 +29,9 @@ class ChangelogEntryResponse(ChangelogEntryBase):
     commit_date: datetime
     commit_message: str
     release_date: datetime
+    is_published: bool
+    published_by: Optional[str] = None
+    published_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -49,6 +52,9 @@ class ChangelogEntryResponse(ChangelogEntryBase):
             "commit_date": obj.commit_date,
             "commit_message": obj.commit_message,
             "release_date": obj.release_date,
+            "is_published": obj.is_published,
+            "published_by": str(obj.published_by.id) if obj.published_by else None,
+            "published_at": obj.published_at,
             "created_at": obj.created_at,
             "updated_at": obj.updated_at
         }
@@ -107,4 +113,17 @@ class UnreadChangelogResponse(BaseModel):
     """Schema for unread changelog entries"""
     unread_count: int
     latest_version: Optional[str] = None
-    entries: List[ChangelogEntryResponse] 
+    entries: List[ChangelogEntryResponse]
+
+
+class ChangelogPublishRequest(BaseModel):
+    """Schema for publishing changelog entries"""
+    entry_id: str = Field(..., description="Changelog entry ID to publish")
+
+
+class ChangelogPublishResponse(BaseModel):
+    """Schema for publish response"""
+    message: str
+    entry_id: str
+    published_at: datetime
+    published_by: str 

@@ -7,7 +7,7 @@ from db.session import models_registry
 
 class Mood(BaseModel):
     objects: ClassVar[Manager] = Manager()
-    id = fields.CharField(primary_key=True, max_length=50)
+    id = fields.UUIDField(primary_key=True)
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
     color = fields.CharField(max_length=20)
@@ -20,7 +20,7 @@ class Mood(BaseModel):
 class DiaryEntry(BaseModel):
     objects: ClassVar[Manager] = Manager()
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="diary_entries")
-    mood = fields.ForeignKey("Mood", on_delete="set_null", null=True, related_name="diary_entries")
+    mood = fields.ForeignKey("Mood", on_delete="SET NULL", null=True, related_name="diary_entries")
     title = fields.CharField(max_length=255)
     content = fields.TextField()
     date = fields.DateField()

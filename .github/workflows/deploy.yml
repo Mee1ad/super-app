@@ -63,7 +63,7 @@ jobs:
             cd ${{ secrets.BACKEND_DIR }}
             docker compose build
             docker compose up -d --force-recreate
-            docker compose exec api python db/migrate.py
+            docker compose exec api python db/migrate_incremental.py migrate
             sleep 3
             for i in {1..5}; do
               if curl --fail http://localhost/ping; then

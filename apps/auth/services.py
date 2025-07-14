@@ -17,27 +17,26 @@ async def get_or_create_user_from_google(google_user_info: Dict[str, Any]) -> Us
     if not email or not google_id:
         raise ValueError("Invalid Google user info")
     
-    # Try to find existing user by Google ID first
-    user = await User.query.filter(google_id=google_id).first()
+    # Try to find existing user by email
+    user = await User.objects.filter(email=email).first()
     
     if not user:
-        # Try to find by email
-        user = await User.query.filter(email=email).first()
+        # Create new user
+        username = google_user_info.get("name", email.split("@")[0])
+        # Ensure username is unique
+        base_username = username
+        counter = 1
+        while await User.objects.filter(username=username).first():
+            username = f"{base_username}{counter}"
+            counter += 1
         
-        if user:
-            # Update existing user with Google ID
-            user.google_id = google_id
-            user.is_verified = True
-            await user.save()
-        else:
-            # Create new user
-            user = await User.query.create(
-                email=email,
-                name=google_user_info.get("name", ""),
-                picture=google_user_info.get("picture"),
-                google_id=google_id,
-                is_verified=True
-            )
+        user = await User.objects.create(
+            email=email,
+            username=username,
+            hashed_password="",  # OAuth users don't need password
+            is_active=True,
+            is_superuser=False  # Default to regular user
+        )
     
     return user
 
@@ -60,7 +59,7 @@ async def authenticate_with_google(code: str) -> LoginResponse:
     token_data = {
         "sub": str(user.id),
         "email": str(user.email),
-        "name": str(user.name)
+        "username": str(user.username)
     }
     
     access_token = create_access_token(token_data)
@@ -70,10 +69,10 @@ async def authenticate_with_google(code: str) -> LoginResponse:
     user_response = UserResponse(
         id=str(user.id),
         email=str(user.email),
-        name=str(user.name),
-        picture=str(user.picture) if user.picture else None,
+        username=str(user.username),
         is_active=bool(user.is_active),
-        is_verified=bool(user.is_verified)
+        is_superuser=bool(user.is_superuser),
+        role_name=user.role.name if user.role else None
     )
     
     token_response = TokenResponse(
@@ -95,7 +94,7 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     
     # Get user
     user_id = payload.get("sub")
-    user = await User.query.get(id=user_id)
+    user = await User.objects.get(id=user_id)
     if not user or not user.is_active:
         raise ValueError("User not found or inactive")
     
@@ -103,7 +102,7 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     token_data = {
         "sub": str(user.id),
         "email": str(user.email),
-        "name": str(user.name)
+        "username": str(user.username)
     }
     
     new_access_token = create_access_token(token_data)
@@ -123,7 +122,7 @@ async def get_current_user(token: str) -> Optional[User]:
     if not user_info:
         return None
     
-    user = await User.query.get(id=user_info["id"])
+    user = await User.objects.get(id=user_info["id"])
     if not user or not user.is_active:
         return None
     

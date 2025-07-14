@@ -1,7 +1,8 @@
 from typing import Optional
-from esmerald import get, post, put, Query, Path, Body
+from esmerald import get, post, put, delete, Query, Path, Body
 from esmerald.responses import JSONResponse
 from esmerald.exceptions import HTTPException
+from esmerald.requests import Request
 
 from .models import ChangeType
 from .schemas import (
@@ -9,9 +10,12 @@ from .schemas import (
     ChangelogViewCreate,
     ChangelogListResponse,
     ChangelogSummary,
-    UnreadChangelogResponse
+    UnreadChangelogResponse,
+    ChangelogPublishRequest,
+    ChangelogPublishResponse
 )
 from .services import ChangelogService
+from core.permissions import require_permission, Permissions
 
 
 # Initialize service
@@ -23,19 +27,27 @@ changelog_service = ChangelogService()
     summary="Get changelog entries",
     description="Retrieve paginated changelog entries with optional filtering"
 )
+@require_permission(Permissions.CHANGELOG_VIEW)
 async def get_changelog_entries(
+    request: Request,
     page: int = 1,
     per_page: int = 20,
     version: Optional[str] = None,
-    change_type: Optional[ChangeType] = None
+    change_type: Optional[ChangeType] = None,
+    include_drafts: bool = False
 ) -> ChangelogListResponse:
     """Get paginated changelog entries"""
     try:
+        # Check if user can view drafts
+        if include_drafts and not request.user.has_permission(Permissions.CHANGELOG_VIEW_DRAFTS):
+            raise HTTPException(status_code=403, detail="Permission to view drafts required")
+        
         entries, total = await changelog_service.get_changelog_entries(
             page=page,
             per_page=per_page,
             version=version,
-            change_type=change_type
+            change_type=change_type,
+            include_drafts=include_drafts
         )
         
         has_next = (page * per_page) < total
@@ -224,4 +236,111 @@ async def get_current_version() -> JSONResponse:
         })
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get current version: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to get current version: {str(e)}")
+
+
+@post(
+    tags=["Changelog"],
+    summary="Publish changelog entry",
+    description="Publish a draft changelog entry (admin only)"
+)
+@require_permission(Permissions.CHANGELOG_PUBLISH)
+async def publish_changelog_entry(
+    request: Request,
+    data: ChangelogPublishRequest
+) -> ChangelogPublishResponse:
+    """Publish a changelog entry"""
+    try:
+        from datetime import datetime
+        
+        success = await changelog_service.publish_changelog_entry(
+            entry_id=data.entry_id,
+            user_id=str(request.user.id)
+        )
+        
+        if success:
+            return ChangelogPublishResponse(
+                message="Changelog entry published successfully",
+                entry_id=data.entry_id,
+                published_at=datetime.now(),
+                published_by=str(request.user.id)
+            )
+        else:
+            raise HTTPException(status_code=404, detail="Changelog entry not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to publish entry: {str(e)}")
+
+
+@post(
+    tags=["Changelog"],
+    summary="Unpublish changelog entry",
+    description="Unpublish a published changelog entry (admin only)"
+)
+@require_permission(Permissions.CHANGELOG_PUBLISH)
+async def unpublish_changelog_entry(
+    request: Request,
+    data: ChangelogPublishRequest
+) -> JSONResponse:
+    """Unpublish a changelog entry"""
+    try:
+        success = await changelog_service.unpublish_changelog_entry(
+            entry_id=data.entry_id
+        )
+        
+        if success:
+            return JSONResponse({"message": "Changelog entry unpublished successfully"})
+        else:
+            raise HTTPException(status_code=404, detail="Changelog entry not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to unpublish entry: {str(e)}")
+
+
+@delete(
+    tags=["Changelog"],
+    summary="Delete changelog entry",
+    description="Delete a changelog entry (admin/editor only)",
+    status_code=200
+)
+@require_permission(Permissions.CHANGELOG_DELETE)
+async def delete_changelog_entry(
+    request: Request,
+    entry_id: str
+) -> JSONResponse:
+    """Delete a changelog entry"""
+    try:
+        success = await changelog_service.delete_changelog_entry(entry_id)
+        
+        if success:
+            return JSONResponse({"message": "Changelog entry deleted successfully"})
+        else:
+            raise HTTPException(status_code=404, detail="Changelog entry not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete entry: {str(e)}")
+
+
+@put(
+    tags=["Changelog"],
+    summary="Update changelog entry",
+    description="Update a changelog entry (admin/editor only)",
+    status_code=200
+)
+@require_permission(Permissions.CHANGELOG_UPDATE)
+async def update_changelog_entry(
+    request: Request,
+    entry_id: str,
+    data: dict
+) -> JSONResponse:
+    """Update a changelog entry"""
+    try:
+        success = await changelog_service.update_changelog_entry(entry_id, **data)
+        
+        if success:
+            return JSONResponse({"message": "Changelog entry updated successfully"})
+        else:
+            raise HTTPException(status_code=404, detail="Changelog entry not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update entry: {str(e)}") 

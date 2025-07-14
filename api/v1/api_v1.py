@@ -20,7 +20,8 @@ from apps.auth.endpoints import google_login, refresh_token, get_google_auth_url
 from apps.changelog.endpoints import (
     get_changelog_entries, get_changelog_entry, get_changelog_summary,
     get_unread_changelog, mark_changelog_viewed, process_new_commits,
-    get_available_versions, get_current_version
+    get_available_versions, get_current_version, publish_changelog_entry,
+    unpublish_changelog_entry, delete_changelog_entry, update_changelog_entry
 )
 
 # V1 API Router - All endpoints under /api/v1/
@@ -87,4 +88,8 @@ v1_routes = [
     Gateway(handler=process_new_commits, path="/changelog/process-commits"),
     Gateway(handler=get_available_versions, path="/changelog/versions"),
     Gateway(handler=get_current_version, path="/changelog/current-version"),
+    Gateway(handler=publish_changelog_entry, path="/changelog/publish"),
+    Gateway(handler=unpublish_changelog_entry, path="/changelog/unpublish"),
+    Gateway(handler=delete_changelog_entry, path="/changelog/{entry_id:uuid}"),
+    Gateway(handler=update_changelog_entry, path="/changelog/{entry_id:uuid}"),
 ] 

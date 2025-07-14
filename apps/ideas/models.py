@@ -28,7 +28,7 @@ class Idea(BaseModel):
     objects: ClassVar[Manager] = Manager()
     
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="ideas")
-    category = fields.ForeignKey("Category", on_delete="set_null", null=True, related_name="ideas")
+    category = fields.ForeignKey("Category", on_delete="SET NULL", null=True, related_name="ideas")
     title = fields.CharField(max_length=255)
     description = fields.TextField(null=True, blank=True)
     is_archived = fields.BooleanField(default=False)

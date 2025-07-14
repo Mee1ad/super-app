@@ -214,7 +214,7 @@
       tags: [app, code, git]
 
     - name: Run initial DB migrations
-      shell: docker compose exec api python db/migrate.py
+      shell: docker compose exec api python db/migrate_incremental.py migrate
       args:
         chdir: "{{ backend_dir }}"
       tags: [ app, db, migrate ]
