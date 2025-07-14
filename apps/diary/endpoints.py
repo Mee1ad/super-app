@@ -22,7 +22,13 @@ diary_service = DiaryService(database)
 )
 async def get_moods() -> MoodsResponse:
     moods = await mood_service.get_all_moods()
-    return MoodsResponse(moods=[MoodResponse.model_validate(mood) for mood in moods])
+    # Convert id to str for each mood
+    mood_responses = []
+    for mood in moods:
+        mood_dict = mood.__dict__.copy()
+        mood_dict["id"] = str(mood.id)
+        mood_responses.append(MoodResponse.model_validate(mood_dict))
+    return MoodsResponse(moods=mood_responses)
 
 @get(
     tags=["Diary"],
