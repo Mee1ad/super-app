@@ -18,6 +18,7 @@ from apps.food_planner.endpoints import (
     get_meal_types, get_food_entries, create_food_entry, get_food_entry,
     update_food_entry, delete_food_entry, get_food_summary, get_calendar_data, upload_food_image
 )
+from apps.auth.endpoints import google_login, refresh_token, get_google_auth_url, google_callback
 
 @get(
     path="/ping",
@@ -155,6 +156,12 @@ cors_config = CORSConfig(
 app = Esmerald(
     routes=[
         Gateway(handler=ping),
+        # Auth endpoints
+        Gateway(handler=google_login, path="/api/v1/auth"),
+        Gateway(handler=refresh_token, path="/api/v1/auth"),
+        Gateway(handler=get_google_auth_url, path="/api/v1/auth"),
+        Gateway(handler=google_callback, path="/api/v1/auth/google/callback"),
+        # Todo endpoints
         Gateway(handler=get_lists),
         Gateway(handler=create_list),
         Gateway(handler=update_list),

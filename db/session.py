@@ -8,4 +8,8 @@ database = Database(settings.get_database_url())
 # Create a shared registry instance
 models_registry = Registry(database=database)
 
+# Import models to register them
+from apps.auth.models import User
+User.Meta.registry = models_registry
+
 # Note: Models will import models_registry directly to avoid circular imports 

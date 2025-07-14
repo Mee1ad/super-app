@@ -22,6 +22,7 @@ from apps.diary.models import Mood, DiaryEntry
 from apps.diary.schemas import MoodCreate
 from apps.food_planner.models import MealType, FoodEntry
 from apps.food_planner.schemas import MealTypeCreate
+from apps.auth.models import User
 
 # Configure logging
 logging.basicConfig(
@@ -160,7 +161,7 @@ async def verify_database():
         logger.info("🔍 Verifying database setup...")
         
         # Check if required tables exist
-        required_tables = ['lists', 'tasks', 'shopping_items']
+        required_tables = ['lists', 'tasks', 'shopping_items', 'users']
         
         for table in required_tables:
             if settings.is_testing:

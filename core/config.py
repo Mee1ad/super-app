@@ -11,6 +11,20 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = os.getenv("SECRET_KEY", "localhost")
     
+    # JWT Configuration
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key")
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 7
+    
+    # Google OAuth Configuration
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/auth/callback")
+    
+    # Client Configuration
+    client_url: str = os.getenv("CLIENT_URL", "http://localhost:3000")
+    
     # Database Configuration (all from env)
     db_host: str = os.getenv("DB_HOST", "localhost")
     db_port: int = int(os.getenv("DB_PORT", 5432))
@@ -64,4 +78,5 @@ class Settings(BaseSettings):
             
         return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
+# Create settings instance
 settings = Settings() 

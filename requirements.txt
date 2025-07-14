@@ -17,3 +17,8 @@ asyncpg>=0.28.0
 pytest-cov>=4.0.0
 httpx>=0.24.0
 aiosqlite>=0.19.0
+# OAuth and JWT dependencies
+authlib>=1.2.0
+itsdangerous>=2.1.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
