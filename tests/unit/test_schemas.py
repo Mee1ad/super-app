@@ -45,6 +45,7 @@ class TestListSchemas:
         """Test list response schema"""
         data = {
             "id": uuid4(),
+            "user_id": uuid4(),
             "type": ListType.SHOPPING,
             "title": "Shopping List",
             "variant": Variant.OUTLINED,
@@ -92,6 +93,7 @@ class TestTaskSchemas:
         data = {
             "id": uuid4(),
             "list_id": uuid4(),
+            "user_id": uuid4(),
             "title": "Test Task",
             "description": "Test Description",
             "checked": True,
@@ -145,6 +147,7 @@ class TestShoppingItemSchemas:
         data = {
             "id": uuid4(),
             "list_id": uuid4(),
+            "user_id": uuid4(),
             "title": "Test Item",
             "url": "https://example.com",
             "price": "$10.99",
@@ -179,6 +182,7 @@ class TestSearchSchemas:
         """Test search response schema"""
         list_response = ListResponse(
             id=uuid4(),
+            user_id=uuid4(),
             type=ListType.TASK,
             title="Test List",
             variant=Variant.DEFAULT,
@@ -189,6 +193,7 @@ class TestSearchSchemas:
         task_response = TaskResponse(
             id=uuid4(),
             list_id=uuid4(),
+            user_id=uuid4(),
             title="Test Task",
             description="Test Description",
             checked=False,
@@ -201,6 +206,7 @@ class TestSearchSchemas:
         item_response = ShoppingItemResponse(
             id=uuid4(),
             list_id=uuid4(),
+            user_id=uuid4(),
             title="Test Item",
             url="https://example.com",
             price="$10.99",

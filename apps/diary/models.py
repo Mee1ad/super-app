@@ -16,7 +16,7 @@ class Mood(Model):
         registry = models_registry
 
 class DiaryEntry(BaseModel):
-    user = fields.ForeignKey("User", on_delete="cascade", related_name="diary_entries")
+    user_id = fields.ForeignKey("User", on_delete="cascade", related_name="diary_entries")
     title = fields.CharField(max_length=255)
     content = fields.TextField()
     mood = fields.ForeignKey("Mood", on_delete="cascade", related_name="entries")

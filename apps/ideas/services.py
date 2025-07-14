@@ -53,13 +53,14 @@ class IdeaService:
     
     async def get_all_ideas(
         self, 
+        user_id: UUID,
         search: Optional[str] = None, 
         category: Optional[str] = None,
         page: int = 1,
         limit: int = 20
     ) -> dict:
-        """Get all ideas with optional filtering and pagination"""
-        query = Idea.query
+        """Get all ideas for a specific user with optional filtering and pagination"""
+        query = Idea.query.filter(user_id=user_id)
         
         # Apply search filter
         if search:
@@ -84,34 +85,37 @@ class IdeaService:
             "pages": (total + limit - 1) // limit
         }
     
-    async def get_idea_by_id(self, idea_id: UUID) -> Idea:
-        """Get an idea by ID"""
-        idea = await Idea.query.get(id=idea_id)
+    async def get_idea_by_id(self, idea_id: UUID, user_id: UUID) -> Idea:
+        """Get an idea by ID for a specific user"""
+        idea = await Idea.query.filter(id=idea_id, user_id=user_id).first()
         if not idea:
             raise ObjectNotFound("Idea not found")
         return idea
     
-    async def create_idea(self, idea_data: IdeaCreate) -> Idea:
-        """Create a new idea"""
+    async def create_idea(self, idea_data: IdeaCreate, user_id: UUID) -> Idea:
+        """Create a new idea for a specific user"""
         # Validate that the category exists
         await Category.query.get(id=idea_data.category)
         
         idea_data_dict = idea_data.model_dump()
+        idea_data_dict['user_id'] = user_id
         return await Idea.query.create(**idea_data_dict)
     
-    async def update_idea(self, idea_id: UUID, idea_data: IdeaUpdate) -> Idea:
-        """Update an idea"""
-        idea = await self.get_idea_by_id(idea_id)
+    async def update_idea(self, idea_id: UUID, idea_data: IdeaUpdate, user_id: UUID) -> Idea:
+        """Update an idea for a specific user"""
+        idea = await self.get_idea_by_id(idea_id, user_id)
         update_data = {k: v for k, v in idea_data.model_dump().items() if v is not None}
         
         # Validate category if it's being updated
         if 'category' in update_data:
             await Category.query.get(id=update_data['category'])
         
-        return await idea.update(**update_data)
+        await idea.update(**update_data)
+        # Reload the idea to ensure user relation is loaded
+        return await self.get_idea_by_id(idea_id, user_id)
     
-    async def delete_idea(self, idea_id: UUID) -> bool:
-        """Delete an idea"""
-        idea = await self.get_idea_by_id(idea_id)
+    async def delete_idea(self, idea_id: UUID, user_id: UUID) -> bool:
+        """Delete an idea for a specific user"""
+        idea = await self.get_idea_by_id(idea_id, user_id)
         await idea.delete()
         return True 

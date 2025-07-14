@@ -45,6 +45,7 @@ class FoodEntryUpdate(BaseModel):
 
 class FoodEntryResponse(FoodEntryBase):
     id: UUID
+    user_id: UUID
     created_at: datetime
     updated_at: datetime
     meal_type: Optional[MealTypeResponse] = None
@@ -54,7 +55,12 @@ class FoodEntryResponse(FoodEntryBase):
     def model_validate_from_orm(cls, obj):
         data = {}
         for field_name in cls.model_fields.keys():
-            if field_name == 'meal_type':
+            if field_name == 'user_id':
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
+            elif field_name == 'meal_type':
                 if hasattr(obj, 'meal_type') and obj.meal_type:
                     data['meal_type'] = MealTypeResponse.model_validate(obj.meal_type)
                 else:

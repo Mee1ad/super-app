@@ -47,8 +47,8 @@ class ListResponse(ListBase):
         data = {}
         for field_name in cls.model_fields.keys():
             if field_name == 'user_id':
-                if hasattr(obj, 'user') and obj.user:
-                    data['user_id'] = getattr(obj.user, 'id', obj.user)
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
                 elif hasattr(obj, 'user_id'):
                     data['user_id'] = getattr(obj, 'user_id')
             elif hasattr(obj, field_name):
@@ -97,8 +97,8 @@ class TaskResponse(TaskBase):
                 elif hasattr(obj, 'list_id'):
                     data['list_id'] = getattr(obj, 'list_id')
             elif field_name == 'user_id':
-                if hasattr(obj, 'user') and obj.user:
-                    data['user_id'] = getattr(obj.user, 'id', obj.user)
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
                 elif hasattr(obj, 'user_id'):
                     data['user_id'] = getattr(obj, 'user_id')
             elif hasattr(obj, field_name):
@@ -151,8 +151,8 @@ class ShoppingItemResponse(ShoppingItemBase):
                 elif hasattr(obj, 'list_id'):
                     data['list_id'] = getattr(obj, 'list_id')
             elif field_name == 'user_id':
-                if hasattr(obj, 'user') and obj.user:
-                    data['user_id'] = getattr(obj.user, 'id', obj.user)
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
                 elif hasattr(obj, 'user_id'):
                     data['user_id'] = getattr(obj, 'user_id')
             elif hasattr(obj, field_name):

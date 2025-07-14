@@ -28,6 +28,7 @@ class FoodEntryService:
 
     async def get_all_entries(
         self, 
+        user_id: UUID,
         search: Optional[str] = None,
         category: Optional[str] = None,
         meal_type: Optional[str] = None,
@@ -35,7 +36,7 @@ class FoodEntryService:
         page: int = 1,
         limit: int = 20
     ) -> Dict[str, Any]:
-        query = FoodEntry.query
+        query = FoodEntry.query.filter(user_id=user_id)
         
         # Apply filters
         if search:
@@ -65,18 +66,19 @@ class FoodEntryService:
             "pages": pages
         }
 
-    async def get_entry_by_id(self, entry_id: UUID) -> FoodEntry:
-        entry = await FoodEntry.query.get(id=entry_id)
+    async def get_entry_by_id(self, entry_id: UUID, user_id: UUID) -> FoodEntry:
+        entry = await FoodEntry.query.filter(id=entry_id, user_id=user_id).first()
         if not entry:
             raise ObjectNotFound("Food entry not found")
         return entry
 
-    async def create_entry(self, entry_data: FoodEntryCreate) -> FoodEntry:
+    async def create_entry(self, entry_data: FoodEntryCreate, user_id: UUID) -> FoodEntry:
         entry_dict = entry_data.model_dump()
+        entry_dict['user_id'] = user_id
         return await FoodEntry.query.create(**entry_dict)
 
-    async def update_entry(self, entry_id: UUID, entry_data: FoodEntryUpdate) -> FoodEntry:
-        entry = await self.get_entry_by_id(entry_id)
+    async def update_entry(self, entry_id: UUID, entry_data: FoodEntryUpdate, user_id: UUID) -> FoodEntry:
+        entry = await self.get_entry_by_id(entry_id, user_id)
         
         # Only include non-None values
         update_data = {k: v for k, v in entry_data.model_dump().items() if v is not None}
@@ -85,14 +87,15 @@ class FoodEntryService:
             await entry.update(**update_data)
             await entry.save()
         
-        return entry
+        # Reload the entry to ensure user relation is loaded
+        return await self.get_entry_by_id(entry_id, user_id)
 
-    async def delete_entry(self, entry_id: UUID) -> None:
-        entry = await self.get_entry_by_id(entry_id)
+    async def delete_entry(self, entry_id: UUID, user_id: UUID) -> None:
+        entry = await self.get_entry_by_id(entry_id, user_id)
         await entry.delete()
 
-    async def get_summary(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> Dict[str, int]:
-        query = FoodEntry.query
+    async def get_summary(self, user_id: UUID, start_date: Optional[date] = None, end_date: Optional[date] = None) -> Dict[str, int]:
+        query = FoodEntry.query.filter(user_id=user_id)
         
         if start_date:
             query = query.filter(date__gte=start_date)
@@ -113,13 +116,13 @@ class FoodEntryService:
             "off_plan_count": off_plan_count
         }
 
-    async def get_calendar_data(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[Dict[str, Any]]:
+    async def get_calendar_data(self, user_id: UUID, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[Dict[str, Any]]:
         if not start_date:
             start_date = date.today() - timedelta(days=30)
         if not end_date:
             end_date = date.today() + timedelta(days=30)
         
-        query = FoodEntry.query.filter(date__gte=start_date, date__lte=end_date)
+        query = FoodEntry.query.filter(user_id=user_id, date__gte=start_date, date__lte=end_date)
         entries = await query.all()
         
         # Group entries by date

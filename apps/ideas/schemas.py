@@ -50,6 +50,7 @@ class IdeaUpdate(BaseModel):
 
 class IdeaResponse(IdeaBase):
     id: UUID = Field(..., description="Unique identifier for the idea")
+    user_id: UUID = Field(..., description="ID of the user who owns the idea")
     category_id: Optional[str] = Field(None, description="ID of the category")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
@@ -58,10 +59,15 @@ class IdeaResponse(IdeaBase):
     
     @classmethod
     def model_validate_from_orm(cls, obj):
-        """Extract data from Edgy ORM model with proper category_id and category handling"""
+        """Extract data from Edgy ORM model with proper category_id, category, and user_id handling"""
         data = {}
         for field_name in cls.model_fields.keys():
-            if field_name == 'category_id':
+            if field_name == 'user_id':
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
+            elif field_name == 'category_id':
                 # Special handling for category_id - extract string from ForeignKey field
                 if hasattr(obj, 'category'):
                     category_value = getattr(obj, 'category')

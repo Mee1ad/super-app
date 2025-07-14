@@ -37,14 +37,21 @@ class DiaryEntryUpdate(BaseModel):
 
 class DiaryEntryResponse(DiaryEntryBase):
     id: UUID
+    user_id: UUID
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, arbitrary_types_allowed=True)
+    
     @classmethod
     def model_validate_from_orm(cls, obj):
         data = {}
         for field_name in cls.model_fields.keys():
-            if field_name == 'mood':
+            if field_name == 'user_id':
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
+            elif field_name == 'mood':
                 if hasattr(obj, 'mood'):
                     mood_value = getattr(obj, 'mood')
                     if hasattr(mood_value, 'id'):

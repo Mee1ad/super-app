@@ -2,7 +2,7 @@
 from typing import List as ListType, Optional
 from uuid import UUID
 
-from esmerald import get, post, put, delete, HTTPException, status, Query
+from esmerald import get, post, put, delete, HTTPException, status, Query, Request
 from esmerald.exceptions import NotFound
 from edgy.exceptions import ObjectNotFound
 
@@ -13,6 +13,7 @@ from .schemas import (
 )
 from .services import CategoryService, IdeaService
 from db.session import database
+from core.dependencies import get_current_user_id
 
 # Dependency injection
 category_service = CategoryService(database)
@@ -49,18 +50,17 @@ async def get_categories() -> CategoriesResponse:
     path="/api/ideas",
     tags=["Ideas"],
     summary="Get all ideas",
-    description="Retrieve all ideas with optional search and category filtering. Supports pagination."
+    description="Retrieve all ideas for the authenticated user with optional search and category filtering. Supports pagination."
 )
 async def get_ideas(
+    request: Request,
     search: Optional[str] = Query(default=None, description="Optional search term to filter ideas by title"),
     category: Optional[str] = Query(default=None, description="Optional category ID to filter ideas"),
     page: int = Query(default=1, description="Page number for pagination (default: 1)"),
     limit: int = Query(default=20, description="Number of ideas per page (default: 20, max: 100)")
 ) -> IdeasResponse:
-    print(f"[DEBUG] category param value: {category}, type: {type(category)}")
-    print(f"[DEBUG] search: {search}, category: {category}, page: {page}, limit: {limit}")
     """
-    Retrieve all ideas with optional filtering and pagination.
+    Retrieve all ideas for the authenticated user with optional filtering and pagination.
     
     This endpoint returns ideas with optional search and category filtering.
     Results are paginated and ordered by creation date (newest first).
@@ -85,13 +85,14 @@ async def get_ideas(
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
     
+    user_id = await get_current_user_id(request)
     result = await idea_service.get_all_ideas(
+        user_id=user_id,
         search=search,
         category=category,
         page=page,
         limit=limit
     )
-    print(f"[DEBUG] result from service: {result}")
     
     try:
         ideas_response = [IdeaResponse.model_validate_from_orm(idea) for idea in result["ideas"]]
@@ -113,11 +114,11 @@ async def get_ideas(
     path="/api/ideas",
     tags=["Ideas"],
     summary="Create a new idea",
-    description="Create a new idea with title, description, category, and optional tags."
+    description="Create a new idea for the authenticated user with title, description, category, and optional tags."
 )
-async def create_idea(data: IdeaCreate) -> IdeaResponse:
+async def create_idea(request: Request, data: IdeaCreate) -> IdeaResponse:
     """
-    Create a new idea.
+    Create a new idea for the authenticated user.
     
     This endpoint creates a new idea with the specified properties.
     The category must exist in the system.
@@ -136,21 +137,22 @@ async def create_idea(data: IdeaCreate) -> IdeaResponse:
         429: Rate limit exceeded - Too many requests, retry after delay
     """
     try:
-        idea = await idea_service.create_idea(data)
+        user_id = await get_current_user_id(request)
+        idea = await idea_service.create_idea(data, user_id)
         return IdeaResponse.model_validate_from_orm(idea)
     except ObjectNotFound:
-        raise NotFound("Category not found")
+        raise HTTPException(status_code=404, detail="Category not found")
 
 
 @get(
     path="/api/ideas/{idea_id:uuid}",
     tags=["Ideas"],
     summary="Get a specific idea",
-    description="Retrieve a specific idea by its ID."
+    description="Retrieve a specific idea by its ID for the authenticated user."
 )
-async def get_idea(idea_id: UUID) -> IdeaResponse:
+async def get_idea(request: Request, idea_id: UUID) -> IdeaResponse:
     """
-    Retrieve a specific idea by ID.
+    Retrieve a specific idea by ID for the authenticated user.
     
     This endpoint returns the complete details of a specific idea.
     
@@ -167,21 +169,22 @@ async def get_idea(idea_id: UUID) -> IdeaResponse:
         429: Rate limit exceeded - Too many requests, retry after delay
     """
     try:
-        idea = await idea_service.get_idea_by_id(idea_id)
+        user_id = await get_current_user_id(request)
+        idea = await idea_service.get_idea_by_id(idea_id, user_id)
         return IdeaResponse.model_validate_from_orm(idea)
     except ObjectNotFound:
-        raise NotFound("Idea not found")
+        raise HTTPException(status_code=404, detail="Idea not found")
 
 
 @put(
     path="/api/ideas/{idea_id:uuid}",
     tags=["Ideas"],
     summary="Update an idea",
-    description="Update an existing idea's properties. Only provided fields will be updated."
+    description="Update an existing idea's properties for the authenticated user. Only provided fields will be updated."
 )
-async def update_idea(idea_id: UUID, data: IdeaUpdate) -> IdeaResponse:
+async def update_idea(request: Request, idea_id: UUID, data: IdeaUpdate) -> IdeaResponse:
     """
-    Update an existing idea's properties.
+    Update an existing idea's properties for the authenticated user.
     
     This endpoint allows partial updates to an idea. Only the fields provided
     in the request will be updated.
@@ -201,10 +204,11 @@ async def update_idea(idea_id: UUID, data: IdeaUpdate) -> IdeaResponse:
         429: Rate limit exceeded - Too many requests, retry after delay
     """
     try:
-        idea = await idea_service.update_idea(idea_id, data)
+        user_id = await get_current_user_id(request)
+        idea = await idea_service.update_idea(idea_id, data, user_id)
         return IdeaResponse.model_validate_from_orm(idea)
     except ObjectNotFound:
-        raise NotFound("Idea not found")
+        raise HTTPException(status_code=404, detail="Idea not found")
 
 
 @delete(
@@ -212,11 +216,11 @@ async def update_idea(idea_id: UUID, data: IdeaUpdate) -> IdeaResponse:
     status_code=200,
     tags=["Ideas"],
     summary="Delete an idea",
-    description="Delete a specific idea by its ID. This action cannot be undone."
+    description="Delete a specific idea by its ID for the authenticated user. This action cannot be undone."
 )
-async def delete_idea(idea_id: UUID) -> dict:
+async def delete_idea(request: Request, idea_id: UUID) -> dict:
     """
-    Delete a specific idea.
+    Delete a specific idea for the authenticated user.
     
     This endpoint permanently deletes an idea. This action cannot be undone.
     
@@ -233,7 +237,8 @@ async def delete_idea(idea_id: UUID) -> dict:
         429: Rate limit exceeded - Too many requests, retry after delay
     """
     try:
-        await idea_service.delete_idea(idea_id)
+        user_id = await get_current_user_id(request)
+        await idea_service.delete_idea(idea_id, user_id)
         return {"message": "Idea deleted successfully"}
     except ObjectNotFound:
-        raise NotFound("Idea not found") 
+        raise HTTPException(status_code=404, detail="Idea not found") 

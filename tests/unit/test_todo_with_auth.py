@@ -46,7 +46,7 @@ async def sample_list(test_user):
     """Create a sample list for the test user"""
     list_data = {
         "id": uuid4(),
-        "user": test_user,
+        "user_id": test_user,
         "type": ListType.TASK,
         "title": "Test List",
         "variant": Variant.DEFAULT
@@ -61,7 +61,7 @@ async def sample_task(test_user, sample_list):
     """Create a sample task for the test user"""
     task_data = {
         "id": uuid4(),
-        "user": test_user,
+        "user_id": test_user,
         "list": sample_list,
         "title": "Test Task",
         "description": "Test description",
@@ -79,7 +79,7 @@ async def sample_shopping_item(test_user, sample_list):
     """Create a sample shopping item for the test user"""
     item_data = {
         "id": uuid4(),
-        "user": test_user,
+        "user_id": test_user,
         "list": sample_list,
         "title": "Test Item",
         "url": "https://example.com",

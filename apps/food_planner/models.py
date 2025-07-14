@@ -16,7 +16,7 @@ class MealType(Model):
         registry = models_registry
 
 class FoodEntry(BaseModel):
-    user = fields.ForeignKey("User", on_delete="cascade", related_name="food_entries")
+    user_id = fields.ForeignKey("User", on_delete="cascade", related_name="food_entries")
     name = fields.CharField(max_length=255)
     category = fields.CharField(max_length=20)  # 'planned' or 'eaten'
     meal_type = fields.ForeignKey("MealType", on_delete="cascade", related_name="food_entries")

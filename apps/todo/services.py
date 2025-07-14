@@ -20,11 +20,11 @@ class ListService:
     
     async def get_all_lists(self, user_id: UUID) -> ListType[List]:
         """Get all lists for a specific user ordered by creation date"""
-        return await List.query.filter(user=user_id).all().order_by("-created_at")
+        return await List.query.filter(user_id=user_id).all().order_by("-created_at")
     
     async def get_list_by_id(self, list_id: UUID, user_id: UUID) -> List:
         """Get a list by ID for a specific user"""
-        list_obj = await List.query.filter(id=list_id, user=user_id).first()
+        list_obj = await List.query.filter(id=list_id, user_id=user_id).first()
         if not list_obj:
             raise ObjectNotFound("List not found")
         return list_obj
@@ -32,7 +32,7 @@ class ListService:
     async def create_list(self, list_data: ListCreate, user_id: UUID) -> List:
         """Create a new list for a specific user"""
         data = list_data.model_dump()
-        data['user'] = user_id
+        data['user_id'] = user_id
         return await List.query.create(**data)
     
     async def update_list(self, list_id: UUID, list_data: ListUpdate, user_id: UUID) -> List:
@@ -58,18 +58,18 @@ class TaskService:
     
     async def get_tasks_by_list(self, list_id: UUID, user_id: UUID) -> ListType[Task]:
         """Get all tasks for a specific list and user"""
-        return await Task.query.filter(list=list_id, user=user_id).all().order_by("position")
+        return await Task.query.filter(list=list_id, user_id=user_id).all().order_by("position")
     
     async def get_task_by_id(self, task_id: UUID, user_id: UUID) -> Task:
         """Get a task by ID for a specific user"""
-        task = await Task.query.filter(id=task_id, user=user_id).first()
+        task = await Task.query.filter(id=task_id, user_id=user_id).first()
         if not task:
             raise ObjectNotFound("Task not found")
         return task
     
     async def create_task(self, task_data: dict, user_id: UUID, list_id: UUID) -> Task:
         data = dict(task_data)
-        data['user'] = user_id
+        data['user_id'] = user_id
         data['list'] = list_id
         return await Task.query.create(**data)
     
@@ -77,7 +77,9 @@ class TaskService:
         """Update a task for a specific user"""
         task = await self.get_task_by_id(task_id, user_id)
         update_data = {k: v for k, v in task_data.model_dump().items() if v is not None}
-        return await task.update(**update_data)
+        await task.update(**update_data)
+        # Reload the task to ensure user relation is loaded
+        return await self.get_task_by_id(task_id, user_id)
     
     async def delete_task(self, task_id: UUID, user_id: UUID) -> bool:
         """Delete a task for a specific user"""
@@ -89,19 +91,20 @@ class TaskService:
         """Toggle task completion status for a specific user"""
         task = await self.get_task_by_id(task_id, user_id)
         task.checked = not task.checked
-        return await task.save()
+        await task.save()
+        # Reload the task to ensure user relation is loaded
+        return await self.get_task_by_id(task_id, user_id)
     
-    async def reorder_tasks(self, list_id: UUID, reorder_data: ReorderRequest, user_id: UUID) -> ListType[Task]:
-        """Reorder tasks in a list for a specific user"""
-        tasks = await self.get_tasks_by_list(list_id, user_id)
-        task_dict = {str(task.id): task for task in tasks}
-        
-        for item in reorder_data.items:
-            if str(item.id) in task_dict:
-                task_dict[str(item.id)].position = item.position
-                await task_dict[str(item.id)].save()
-        
-        return await self.get_tasks_by_list(list_id, user_id)
+    async def reorder_tasks(self, list_id: UUID, reorder_data: ReorderRequest, user_id: UUID) -> None:
+        """Reorder tasks for a list by updating their positions."""
+        task_ids = reorder_data.item_ids
+        tasks = await Task.query.filter(list=list_id, user_id=user_id).all()
+        task_map = {str(task.id): task for task in tasks}
+        for position, task_id in enumerate(task_ids):
+            task = task_map.get(str(task_id))
+            if task:
+                task.position = position
+                await task.save()
 
 
 class ShoppingItemService:
@@ -112,18 +115,18 @@ class ShoppingItemService:
     
     async def get_items_by_list(self, list_id: UUID, user_id: UUID) -> ListType[ShoppingItem]:
         """Get all shopping items for a specific list and user"""
-        return await ShoppingItem.query.filter(list=list_id, user=user_id).all().order_by("position")
+        return await ShoppingItem.query.filter(list=list_id, user_id=user_id).all().order_by("position")
     
     async def get_item_by_id(self, item_id: UUID, user_id: UUID) -> ShoppingItem:
         """Get a shopping item by ID for a specific user"""
-        item = await ShoppingItem.query.filter(id=item_id, user=user_id).first()
+        item = await ShoppingItem.query.filter(id=item_id, user_id=user_id).first()
         if not item:
             raise ObjectNotFound("Shopping item not found")
         return item
     
     async def create_item(self, item_data: dict, user_id: UUID, list_id: UUID) -> ShoppingItem:
         data = dict(item_data)
-        data['user'] = user_id
+        data['user_id'] = user_id
         data['list'] = list_id
         return await ShoppingItem.query.create(**data)
     
@@ -131,7 +134,9 @@ class ShoppingItemService:
         """Update a shopping item for a specific user"""
         item = await self.get_item_by_id(item_id, user_id)
         update_data = {k: v for k, v in item_data.model_dump().items() if v is not None}
-        return await item.update(**update_data)
+        await item.update(**update_data)
+        # Reload the item to ensure user relation is loaded
+        return await self.get_item_by_id(item_id, user_id)
     
     async def delete_item(self, item_id: UUID, user_id: UUID) -> bool:
         """Delete a shopping item for a specific user"""
@@ -143,19 +148,20 @@ class ShoppingItemService:
         """Toggle shopping item completion status for a specific user"""
         item = await self.get_item_by_id(item_id, user_id)
         item.checked = not item.checked
-        return await item.save()
+        await item.save()
+        # Reload the item to ensure user relation is loaded
+        return await self.get_item_by_id(item_id, user_id)
     
-    async def reorder_items(self, list_id: UUID, reorder_data: ReorderRequest, user_id: UUID) -> ListType[ShoppingItem]:
-        """Reorder shopping items in a list for a specific user"""
-        items = await self.get_items_by_list(list_id, user_id)
-        item_dict = {str(item.id): item for item in items}
-        
-        for item in reorder_data.items:
-            if str(item.id) in item_dict:
-                item_dict[str(item.id)].position = item.position
-                await item_dict[str(item.id)].save()
-        
-        return await self.get_items_by_list(list_id, user_id)
+    async def reorder_items(self, list_id: UUID, reorder_data: ReorderRequest, user_id: UUID) -> None:
+        """Reorder shopping items for a list by updating their positions."""
+        item_ids = reorder_data.item_ids
+        items = await ShoppingItem.query.filter(list=list_id, user_id=user_id).all()
+        item_map = {str(item.id): item for item in items}
+        for position, item_id in enumerate(item_ids):
+            item = item_map.get(str(item_id))
+            if item:
+                item.position = position
+                await item.save()
 
 
 class SearchService:
@@ -168,19 +174,19 @@ class SearchService:
         """Search across all user content"""
         # Search in lists
         lists = await List.query.filter(
-            user=user_id,
+            user_id=user_id,
             title__icontains=query
         ).all()
         
         # Search in tasks
         tasks = await Task.query.filter(
-            user=user_id,
+            user_id=user_id,
             title__icontains=query
         ).all()
         
         # Search in shopping items
         shopping_items = await ShoppingItem.query.filter(
-            user=user_id,
+            user_id=user_id,
             title__icontains=query
         ).all()
         

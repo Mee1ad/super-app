@@ -109,8 +109,11 @@ async def update_list(
         422: Validation error - Invalid input data
     """
     user_id = await get_current_user_id(request)
-    list_obj = await list_service.update_list(list_id, data, user_id)
-    return ListResponse.model_validate_from_orm(list_obj)
+    try:
+        list_obj = await list_service.update_list(list_id, data, user_id)
+        return ListResponse.model_validate_from_orm(list_obj)
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="List not found")
 
 
 @delete(
@@ -138,8 +141,11 @@ async def delete_list(
         404: Not found - List not found
     """
     user_id = await get_current_user_id(request)
-    await list_service.delete_list(list_id, user_id)
-    return {"message": "List deleted successfully"}
+    try:
+        await list_service.delete_list(list_id, user_id)
+        return {"message": "List deleted successfully"}
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="List not found")
 
 
 @get(
@@ -196,13 +202,14 @@ async def create_task(
 
 
 @put(
-    path="/api/tasks/{task_id:uuid}",
+    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
     tags=["Tasks"],
     summary="Update a task",
     description="Update an existing task for the authenticated user."
 )
 async def update_task(
     request: Request,
+    list_id: UUID,
     task_id: UUID,
     data: TaskUpdate
 ) -> TaskResponse:
@@ -210,6 +217,7 @@ async def update_task(
     Update an existing task for the authenticated user.
     
     Args:
+        list_id: ID of the list containing the task
         task_id: ID of the task to update
         data: Task update data
         
@@ -223,12 +231,15 @@ async def update_task(
         422: Validation error - Invalid input data
     """
     user_id = await get_current_user_id(request)
-    task = await task_service.update_task(task_id, data, user_id)
-    return TaskResponse.model_validate_from_orm(task)
+    try:
+        task = await task_service.update_task(task_id, data, user_id)
+        return TaskResponse.model_validate_from_orm(task)
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="Task not found")
 
 
 @delete(
-    path="/api/tasks/{task_id:uuid}",
+    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}",
     tags=["Tasks"],
     summary="Delete a task",
     description="Delete a task for the authenticated user.",
@@ -236,12 +247,14 @@ async def update_task(
 )
 async def delete_task(
     request: Request,
+    list_id: UUID,
     task_id: UUID
 ) -> dict:
     """
     Delete a task for the authenticated user.
     
     Args:
+        list_id: ID of the list containing the task
         task_id: ID of the task to delete
         
     Returns:
@@ -252,24 +265,29 @@ async def delete_task(
         404: Not found - Task not found
     """
     user_id = await get_current_user_id(request)
-    await task_service.delete_task(task_id, user_id)
-    return {"message": "Task deleted successfully"}
+    try:
+        await task_service.delete_task(task_id, user_id)
+        return {"message": "Task deleted successfully"}
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="Task not found")
 
 
 @put(
-    path="/api/tasks/{task_id:uuid}/toggle",
+    path="/api/lists/{list_id:uuid}/tasks/{task_id:uuid}/toggle",
     tags=["Tasks"],
     summary="Toggle task completion",
     description="Toggle the completion status of a task for the authenticated user."
 )
 async def toggle_task(
     request: Request,
+    list_id: UUID,
     task_id: UUID
 ) -> TaskResponse:
     """
     Toggle the completion status of a task for the authenticated user.
     
     Args:
+        list_id: ID of the list containing the task
         task_id: ID of the task to toggle
         
     Returns:
@@ -280,8 +298,11 @@ async def toggle_task(
         404: Not found - Task not found
     """
     user_id = await get_current_user_id(request)
-    task = await task_service.toggle_task(task_id, user_id)
-    return TaskResponse.model_validate_from_orm(task)
+    try:
+        task = await task_service.toggle_task(task_id, user_id)
+        return TaskResponse.model_validate_from_orm(task)
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="Task not found")
 
 
 @put(
@@ -294,26 +315,13 @@ async def reorder_tasks(
     request: Request,
     list_id: UUID,
     data: ReorderRequest
-) -> ListType[TaskResponse]:
+) -> dict:
     """
     Reorder tasks in a list for the authenticated user.
-    
-    Args:
-        list_id: ID of the list containing the tasks
-        data: Reorder request data with item IDs and positions
-        
-    Returns:
-        List[TaskResponse]: Updated tasks in new order
-        
-    Raises:
-        400: Bad request - Invalid reorder data
-        401: Authentication required - Include valid Authorization header
-        404: Not found - List not found
-        422: Validation error - Invalid input data
     """
     user_id = await get_current_user_id(request)
-    tasks = await task_service.reorder_tasks(list_id, data, user_id)
-    return [TaskResponse.model_validate_from_orm(task) for task in tasks]
+    await task_service.reorder_tasks(list_id, data, user_id)
+    return {"message": "Tasks reordered successfully"}
 
 
 @get(
@@ -370,13 +378,14 @@ async def create_item(
 
 
 @put(
-    path="/api/items/{item_id:uuid}",
+    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
     tags=["Shopping Items"],
     summary="Update a shopping item",
     description="Update an existing shopping item for the authenticated user."
 )
 async def update_item(
     request: Request,
+    list_id: UUID,
     item_id: UUID,
     data: ShoppingItemUpdate
 ) -> ShoppingItemResponse:
@@ -384,6 +393,7 @@ async def update_item(
     Update an existing shopping item for the authenticated user.
     
     Args:
+        list_id: ID of the list containing the item
         item_id: ID of the item to update
         data: Shopping item update data
         
@@ -397,12 +407,15 @@ async def update_item(
         422: Validation error - Invalid input data
     """
     user_id = await get_current_user_id(request)
-    item = await shopping_item_service.update_item(item_id, data, user_id)
-    return ShoppingItemResponse.model_validate_from_orm(item)
+    try:
+        item = await shopping_item_service.update_item(item_id, data, user_id)
+        return ShoppingItemResponse.model_validate_from_orm(item)
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="Shopping item not found")
 
 
 @delete(
-    path="/api/items/{item_id:uuid}",
+    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}",
     tags=["Shopping Items"],
     summary="Delete a shopping item",
     description="Delete a shopping item for the authenticated user.",
@@ -410,12 +423,14 @@ async def update_item(
 )
 async def delete_item(
     request: Request,
+    list_id: UUID,
     item_id: UUID
 ) -> dict:
     """
     Delete a shopping item for the authenticated user.
     
     Args:
+        list_id: ID of the list containing the item
         item_id: ID of the item to delete
         
     Returns:
@@ -426,24 +441,29 @@ async def delete_item(
         404: Not found - Item not found
     """
     user_id = await get_current_user_id(request)
-    await shopping_item_service.delete_item(item_id, user_id)
-    return {"message": "Shopping item deleted successfully"}
+    try:
+        await shopping_item_service.delete_item(item_id, user_id)
+        return {"message": "Shopping item deleted successfully"}
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="Shopping item not found")
 
 
 @put(
-    path="/api/items/{item_id:uuid}/toggle",
+    path="/api/lists/{list_id:uuid}/items/{item_id:uuid}/toggle",
     tags=["Shopping Items"],
     summary="Toggle shopping item completion",
     description="Toggle the completion status of a shopping item for the authenticated user."
 )
 async def toggle_item(
     request: Request,
+    list_id: UUID,
     item_id: UUID
 ) -> ShoppingItemResponse:
     """
     Toggle the completion status of a shopping item for the authenticated user.
     
     Args:
+        list_id: ID of the list containing the item
         item_id: ID of the item to toggle
         
     Returns:
@@ -454,8 +474,11 @@ async def toggle_item(
         404: Not found - Item not found
     """
     user_id = await get_current_user_id(request)
-    item = await shopping_item_service.toggle_item(item_id, user_id)
-    return ShoppingItemResponse.model_validate_from_orm(item)
+    try:
+        item = await shopping_item_service.toggle_item(item_id, user_id)
+        return ShoppingItemResponse.model_validate_from_orm(item)
+    except ObjectNotFound:
+        raise HTTPException(status_code=404, detail="Shopping item not found")
 
 
 @put(
@@ -468,26 +491,13 @@ async def reorder_items(
     request: Request,
     list_id: UUID,
     data: ReorderRequest
-) -> ListType[ShoppingItemResponse]:
+) -> dict:
     """
     Reorder shopping items in a list for the authenticated user.
-    
-    Args:
-        list_id: ID of the list containing the items
-        data: Reorder request data with item IDs and positions
-        
-    Returns:
-        List[ShoppingItemResponse]: Updated items in new order
-        
-    Raises:
-        400: Bad request - Invalid reorder data
-        401: Authentication required - Include valid Authorization header
-        404: Not found - List not found
-        422: Validation error - Invalid input data
     """
     user_id = await get_current_user_id(request)
-    items = await shopping_item_service.reorder_items(list_id, data, user_id)
-    return [ShoppingItemResponse.model_validate_from_orm(item) for item in items]
+    await shopping_item_service.reorder_items(list_id, data, user_id)
+    return {"message": "Shopping items reordered successfully"}
 
 
 @get(
