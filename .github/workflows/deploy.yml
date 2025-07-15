@@ -12,6 +12,7 @@ jobs:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       IP_SALT: ${{ secrets.IP_SALT }}
       USER_AGENT_SALT: ${{ secrets.USER_AGENT_SALT }}
+      CLIENT_URL: ${{ secrets.CLIENT_URL }}
     steps:
       - uses: actions/checkout@v3
 
@@ -47,6 +48,7 @@ jobs:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       IP_SALT: ${{ secrets.IP_SALT }}
       USER_AGENT_SALT: ${{ secrets.USER_AGENT_SALT }}
+      CLIENT_URL: ${{ secrets.CLIENT_URL }}
     steps:
       - uses: actions/checkout@v3
 
