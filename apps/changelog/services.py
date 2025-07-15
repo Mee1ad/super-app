@@ -625,12 +625,12 @@ class ChangelogService:
 
     def _hash_ip_address(self, ip_address: str) -> str:
         """Hash IP address for privacy protection"""
-        salt = getattr(settings, "anonymous_ip_salt", "default_ip_salt_change_in_production")
+        salt = getattr(settings, "ip_salt", "default_ip_salt_change_in_production")
         return hashlib.sha256(f"{ip_address}:{salt}".encode()).hexdigest()
 
     def _hash_user_agent(self, user_agent: str) -> str:
         """Hash user agent for privacy protection"""
-        salt = getattr(settings, "anonymous_user_agent_salt", "default_ua_salt_change_in_production")
+        salt = getattr(settings, "user_agent_salt", "default_ua_salt_change_in_production")
         return hashlib.sha256(f"{user_agent}:{salt}".encode()).hexdigest()
 
     async def get_latest_version(self) -> Optional[str]:

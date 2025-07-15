@@ -416,8 +416,8 @@ The system uses the following configuration settings:
 
 ```python
 # In your settings file
-ANONYMOUS_IP_SALT = "your-secure-ip-salt-here"
-ANONYMOUS_USER_AGENT_SALT = "your-secure-ua-salt-here"
+IP_SALT = "your-secure-ip-salt-here"
+USER_AGENT_SALT = "your-secure-ua-salt-here"
 ```
 
 ## Privacy Considerations

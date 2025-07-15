@@ -481,10 +481,10 @@ Add to your `.env` file:
 
 ```bash
 # Salt for IP address hashing (change in production)
-ANONYMOUS_IP_SALT=your_secure_random_ip_salt_here
+IP_SALT=your_secure_random_ip_salt_here
 
 # Salt for user agent hashing (change in production)
-ANONYMOUS_USER_AGENT_SALT=your_secure_random_ua_salt_here
+USER_AGENT_SALT=your_secure_random_ua_salt_here
 ```
 
 ### Security Considerations
