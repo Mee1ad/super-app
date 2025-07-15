@@ -1,6 +1,7 @@
 import subprocess
 import json
 import re
+import hashlib
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timezone
 import httpx
@@ -412,8 +413,13 @@ class ChangelogService:
         """Get paginated changelog entries"""
         query = ChangelogEntry.objects.all()
         
-        # Filter by published status unless drafts are requested
-        if not include_drafts:
+        # Filter by published status based on include_drafts parameter
+        if include_drafts:
+            # When include_drafts=True, we want both published and drafts (all entries)
+            # So no filter on is_published
+            pass
+        else:
+            # When include_drafts=False, we want only published entries
             query = query.filter(is_published=True)
         
         if version:
@@ -430,6 +436,61 @@ class ChangelogService:
         entries = await query.offset(offset).limit(per_page).order_by("-release_date").all()
         
         return entries, total
+    
+    async def get_changelog_entries_by_status(
+        self,
+        page: int = 1,
+        per_page: int = 20,
+        version: Optional[str] = None,
+        change_type: Optional[ChangeType] = None,
+        status: str = "published"
+    ) -> Tuple[List[ChangelogEntry], int]:
+        """Get paginated changelog entries filtered by status"""
+        query = ChangelogEntry.objects.all()
+        
+        # Filter by status
+        if status == "published":
+            query = query.filter(is_published=True)
+        elif status == "drafts":
+            query = query.filter(is_published=False)
+        elif status == "all":
+            # No filter - include both published and drafts
+            pass
+        else:
+            raise ValueError(f"Invalid status: {status}. Use 'published', 'drafts', or 'all'")
+        
+        if version:
+            query = query.filter(version=version)
+        
+        if change_type:
+            query = query.filter(change_type=change_type)
+        
+        # Get total count
+        total = await query.count()
+        
+        # Get paginated results
+        offset = (page - 1) * per_page
+        entries = await query.offset(offset).limit(per_page).order_by("-release_date").all()
+        
+        return entries, total
+    
+    async def get_latest_changelog_entries(self, limit: int = 10) -> List[ChangelogEntry]:
+        """Get the latest changelog entries (most recent version)"""
+        # Get only published entries, ordered by release date (newest first)
+        entries = await ChangelogEntry.objects.filter(
+            is_published=True
+        ).order_by("-release_date").limit(limit).all()
+        
+        return entries
+    
+    async def get_changelog_entries_by_version(self, version: str) -> List[ChangelogEntry]:
+        """Get all changelog entries for a specific version"""
+        entries = await ChangelogEntry.objects.filter(
+            version=version,
+            is_published=True
+        ).order_by("-release_date").all()
+        
+        return entries
     
     async def get_unread_entries(self, user_identifier: str) -> List[ChangelogEntry]:
         """Get unread changelog entries for a user"""
@@ -449,30 +510,7 @@ class ChangelogService:
         ]
         
         return unread_entries
-    
-    async def mark_as_viewed(self, entry_id: str, user_identifier: str) -> bool:
-        """Mark a changelog entry as viewed by a user"""
-        try:
-            # Check if entry exists
-            entry = await ChangelogEntry.objects.get(id=entry_id)
-            
-            # Check if already viewed
-            existing_view = await ChangelogView.objects.filter(
-                entry=entry_id,
-                user_identifier=user_identifier
-            ).first()
-            
-            if not existing_view:
-                await ChangelogView.objects.create(
-                    entry=entry_id,
-                    user_identifier=user_identifier
-                )
-            
-            return True
-            
-        except Exception:
-            return False
-    
+
     async def get_changelog_summary(self, version: Optional[str] = None) -> Dict:
         """Get summary statistics for changelog entries"""
         query = ChangelogEntry.objects.all()
@@ -574,4 +612,351 @@ class ChangelogService:
             
         except Exception as e:
             self.logger.error(f"Failed to update changelog entry: {e}")
-            return False 
+            return False
+
+    def _generate_anonymous_id(self, ip_address: str, user_agent: str) -> str:
+        """Generate a privacy-protected anonymous identifier"""
+        # Combine IP and User-Agent with a salt for additional security
+        salt = getattr(settings, "anonymous_id_salt", "default_salt_change_in_production")
+        combined = f"{ip_address}:{user_agent}:{salt}"
+        
+        # Create SHA-256 hash for privacy protection
+        return hashlib.sha256(combined.encode()).hexdigest()
+
+    def _hash_ip_address(self, ip_address: str) -> str:
+        """Hash IP address for privacy protection"""
+        salt = getattr(settings, "anonymous_ip_salt", "default_ip_salt_change_in_production")
+        return hashlib.sha256(f"{ip_address}:{salt}".encode()).hexdigest()
+
+    def _hash_user_agent(self, user_agent: str) -> str:
+        """Hash user agent for privacy protection"""
+        salt = getattr(settings, "anonymous_user_agent_salt", "default_ua_salt_change_in_production")
+        return hashlib.sha256(f"{user_agent}:{salt}".encode()).hexdigest()
+
+    async def get_latest_version(self) -> Optional[str]:
+        """Get the latest published version"""
+        try:
+            latest_entry = await ChangelogEntry.objects.filter(
+                is_published=True
+            ).order_by("-release_date").first()
+            
+            return latest_entry.version if latest_entry else None
+        except Exception:
+            return None
+
+    async def get_changelog_status(
+        self, 
+        ip_address: str, 
+        user_agent: str
+    ) -> Dict:
+        """
+        Get changelog status for any user (anonymous or authenticated).
+        Returns whether user should see changelog and what version they've seen.
+        """
+        try:
+            hashed_ip = self._hash_ip_address(ip_address)
+            hashed_user_agent = self._hash_user_agent(user_agent)
+            latest_version = await self.get_latest_version()
+            
+            # Debug logging
+            self.logger.info(f"Changelog status check - IP: {ip_address[:10]}..., UA: {user_agent[:30]}...")
+            self.logger.info(f"Hashed IP: {hashed_ip[:16]}..., Hashed UA: {hashed_user_agent[:16]}...")
+            self.logger.info(f"Latest version: {latest_version}")
+            
+            if not latest_version:
+                self.logger.info("No latest version found")
+                return {
+                    "should_show": False,
+                    "latest_version": None,
+                    "user_version": None,
+                    "has_new_content": False
+                }
+            
+            # Check if user has seen this version
+            user_view = await ChangelogView.objects.filter(
+                hashed_ip=hashed_ip,
+                hashed_user_agent=hashed_user_agent
+            ).first()
+            
+            if not user_view:
+                # New user - should show changelog
+                self.logger.info("New user - should show changelog")
+                return {
+                    "should_show": True,
+                    "latest_version": latest_version,
+                    "user_version": None,
+                    "has_new_content": True
+                }
+            
+            # Check if user has seen the latest version
+            self.logger.info(f"User has seen version: {user_view.latest_version_seen}, Latest: {latest_version}")
+            
+            if user_view.latest_version_seen == latest_version:
+                # User has seen latest version - don't show changelog
+                self.logger.info("User has seen latest version - don't show changelog")
+                return {
+                    "should_show": False,
+                    "latest_version": latest_version,
+                    "user_version": user_view.latest_version_seen,
+                    "has_new_content": False
+                }
+            else:
+                # User hasn't seen latest version - show changelog
+                self.logger.info("User hasn't seen latest version - show changelog")
+                return {
+                    "should_show": True,
+                    "latest_version": latest_version,
+                    "user_version": user_view.latest_version_seen,
+                    "has_new_content": True
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Error getting changelog status: {e}")
+            return {
+                "should_show": False,
+                "latest_version": None,
+                "user_version": None,
+                "has_new_content": False
+            }
+
+    async def mark_as_viewed(
+        self, 
+        ip_address: str, 
+        user_agent: str
+    ) -> bool:
+        """Mark changelog as viewed by any user (anonymous or authenticated)"""
+        try:
+            hashed_ip = self._hash_ip_address(ip_address)
+            hashed_user_agent = self._hash_user_agent(user_agent)
+            latest_version = await self.get_latest_version()
+            
+            # Enhanced debug logging with full hash values
+            self.logger.info("=" * 60)
+            self.logger.info("🔍 /changelog/viewed REQUEST DEBUG")
+            self.logger.info("=" * 60)
+            self.logger.info(f"📝 Raw IP Address: {ip_address}")
+            self.logger.info(f"📝 Raw User-Agent: {user_agent}")
+            self.logger.info(f"🔐 Full Hashed IP: {hashed_ip}")
+            self.logger.info(f"🔐 Full Hashed User-Agent: {hashed_user_agent}")
+            self.logger.info(f"📊 Latest version to mark as seen: {latest_version}")
+            
+            # Also print to console for immediate visibility
+            print("=" * 60)
+            print("🔍 /changelog/viewed REQUEST DEBUG")
+            print("=" * 60)
+            print(f"📝 Raw IP Address: {ip_address}")
+            print(f"📝 Raw User-Agent: {user_agent}")
+            print(f"🔐 Full Hashed IP: {hashed_ip}")
+            print(f"🔐 Full Hashed User-Agent: {hashed_user_agent}")
+            print(f"📊 Latest version to mark as seen: {latest_version}")
+            
+            if not latest_version:
+                self.logger.warning("⚠️  No latest version found for marking as viewed")
+                self.logger.info("=" * 60)
+                return False
+            
+            # Get or create user view record
+            user_view, created = await ChangelogView.objects.get_or_create(
+                hashed_ip=hashed_ip,
+                hashed_user_agent=hashed_user_agent,
+                defaults={
+                    "latest_version_seen": latest_version,
+                    "view_count": 1
+                }
+            )
+            
+            if created:
+                self.logger.info("✅ Created NEW user view record")
+                self.logger.info(f"📊 Version marked as seen: {latest_version}")
+                self.logger.info(f"📊 View count: 1")
+            else:
+                # Update existing record
+                old_version = user_view.latest_version_seen
+                user_view.latest_version_seen = latest_version
+                user_view.last_seen = datetime.now(timezone.utc)
+                user_view.view_count += 1
+                await user_view.save()
+                self.logger.info("✅ Updated EXISTING user view record")
+                self.logger.info(f"📊 Old version: {old_version}")
+                self.logger.info(f"📊 New version: {latest_version}")
+                self.logger.info(f"📊 View count: {user_view.view_count}")
+                self.logger.info(f"📊 Last seen: {user_view.last_seen}")
+            
+            self.logger.info("✅ Successfully marked changelog as viewed")
+            self.logger.info("=" * 60)
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error marking as viewed: {e}")
+            self.logger.info("=" * 60)
+            return False
+
+    async def get_latest_changelog_for_user(
+        self, 
+        ip_address: str, 
+        user_agent: str,
+        limit: int = 10
+    ) -> Dict:
+        """
+        Get latest changelog entries for any user (anonymous or authenticated).
+        First checks if hashed data exists in database, returns empty if it does.
+        """
+        try:
+            hashed_ip = self._hash_ip_address(ip_address)
+            hashed_user_agent = self._hash_user_agent(user_agent)
+            
+            # Enhanced debug logging with full hash values
+            self.logger.info("=" * 60)
+            self.logger.info("🔍 /changelog/latest REQUEST DEBUG")
+            self.logger.info("=" * 60)
+            self.logger.info(f"📝 Raw IP Address: {ip_address}")
+            self.logger.info(f"📝 Raw User-Agent: {user_agent}")
+            self.logger.info(f"🔐 Full Hashed IP: {hashed_ip}")
+            self.logger.info(f"🔐 Full Hashed User-Agent: {hashed_user_agent}")
+            self.logger.info(f"🔍 Looking for hash combination in database...")
+            
+            # Also print to console for immediate visibility
+            print("=" * 60)
+            print("🔍 /changelog/latest REQUEST DEBUG")
+            print("=" * 60)
+            print(f"📝 Raw IP Address: {ip_address}")
+            print(f"📝 Raw User-Agent: {user_agent}")
+            print(f"🔐 Full Hashed IP: {hashed_ip}")
+            print(f"🔐 Full Hashed User-Agent: {hashed_user_agent}")
+            print(f"🔍 Looking for hash combination in database...")
+            
+            # First check if hashed data exists in database
+            user_view = await ChangelogView.objects.filter(
+                hashed_ip=hashed_ip,
+                hashed_user_agent=hashed_user_agent
+            ).first()
+            
+            if user_view:
+                # Hash data exists - user has seen changelog before
+                self.logger.info("✅ HASH FOUND in database!")
+                self.logger.info(f"📊 User has seen version: {user_view.latest_version_seen}")
+                self.logger.info(f"📊 View count: {user_view.view_count}")
+                self.logger.info(f"📊 First seen: {user_view.first_seen}")
+                self.logger.info(f"📊 Last seen: {user_view.last_seen}")
+                
+                latest_version = await self.get_latest_version()
+                self.logger.info(f"📊 Latest version available: {latest_version}")
+                self.logger.info("🚫 Returning empty response - user already seen changelog")
+                self.logger.info("=" * 60)
+                
+                # Also print to console
+                print("✅ HASH FOUND in database!")
+                print(f"📊 User has seen version: {user_view.latest_version_seen}")
+                print(f"📊 View count: {user_view.view_count}")
+                print(f"📊 First seen: {user_view.first_seen}")
+                print(f"📊 Last seen: {user_view.last_seen}")
+                print(f"📊 Latest version available: {latest_version}")
+                print("🚫 Returning empty response - user already seen changelog")
+                print("=" * 60)
+                
+                return {
+                    "entries": [],
+                    "total": 0,
+                    "latest_version": latest_version,
+                    "user_version": user_view.latest_version_seen,
+                    "has_new_content": False,
+                    "reason": "user_already_seen"
+                }
+            
+            # Hash data doesn't exist - new user, should show changelog
+            self.logger.info("❌ HASH NOT FOUND in database")
+            self.logger.info("🆕 This appears to be a new user")
+            self.logger.info("📋 Will show changelog entries")
+            
+            # Also print to console
+            print("❌ HASH NOT FOUND in database")
+            print("🆕 This appears to be a new user")
+            print("📋 Will show changelog entries")
+            
+            # Get latest version and entries
+            latest_version = await self.get_latest_version()
+            if not latest_version:
+                self.logger.info("⚠️  No latest version found")
+                self.logger.info("=" * 60)
+                print("⚠️  No latest version found")
+                print("=" * 60)
+                return {
+                    "entries": [],
+                    "total": 0,
+                    "latest_version": None,
+                    "user_version": None,
+                    "has_new_content": False,
+                    "reason": "no_latest_version"
+                }
+            
+            # Get latest entries
+            entries = await self.get_latest_changelog_entries(limit=limit)
+            self.logger.info(f"📋 Found {len(entries)} changelog entries")
+            self.logger.info(f"📊 Latest version: {latest_version}")
+            self.logger.info("✅ Returning changelog entries for new user")
+            self.logger.info("=" * 60)
+            
+            # Also print to console
+            print(f"📋 Found {len(entries)} changelog entries")
+            print(f"📊 Latest version: {latest_version}")
+            print("✅ Returning changelog entries for new user")
+            print("=" * 60)
+            
+            return {
+                "entries": entries,
+                "total": len(entries),
+                "latest_version": latest_version,
+                "user_version": None,
+                "has_new_content": True,
+                "reason": "new_user"
+            }
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error getting latest changelog for user: {e}")
+            self.logger.info("=" * 60)
+            return {
+                "entries": [],
+                "total": 0,
+                "latest_version": None,
+                "user_version": None,
+                "has_new_content": False,
+                "reason": "error"
+            }
+
+    async def debug_user_views(self, ip_address: str, user_agent: str) -> Dict:
+        """Debug method to check user views in database"""
+        try:
+            hashed_ip = self._hash_ip_address(ip_address)
+            hashed_user_agent = self._hash_user_agent(user_agent)
+            
+            # Get all user views
+            views = await ChangelogView.objects.filter(
+                hashed_ip=hashed_ip,
+                hashed_user_agent=hashed_user_agent
+            ).all()
+            
+            # Get latest version
+            latest_version = await self.get_latest_version()
+            
+            return {
+                "ip_address": ip_address[:10] + "...",
+                "user_agent": user_agent[:30] + "...",
+                "hashed_ip": hashed_ip[:16] + "...",
+                "hashed_user_agent": hashed_user_agent[:16] + "...",
+                "latest_version": latest_version,
+                "total_views": len(views),
+                "views": [
+                    {
+                        "id": str(view.id),
+                        "latest_version_seen": view.latest_version_seen,
+                        "view_count": view.view_count,
+                        "first_seen": view.first_seen.isoformat(),
+                        "last_seen": view.last_seen.isoformat()
+                    }
+                    for view in views
+                ]
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in debug_user_views: {e}")
+            return {"error": str(e)} 

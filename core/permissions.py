@@ -1,12 +1,13 @@
 """
 Role-based permissions system
 """
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from functools import wraps
 from esmerald import HTTPException
 from esmerald.requests import Request
 
-from apps.auth.models import User
+if TYPE_CHECKING:
+    from apps.auth.models import User
 
 
 # Permission constants
@@ -77,7 +78,10 @@ def require_permission(permission: str):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Get request from args or kwargs
+            # Get user from dependencies
+            from core.dependencies import get_current_user_dependency
+            
+            # Find request in args or kwargs
             request = None
             for arg in args:
                 if isinstance(arg, Request):
@@ -93,9 +97,10 @@ def require_permission(permission: str):
             if not request:
                 raise HTTPException(status_code=500, detail="Request object not found")
             
-            # Get user from request
-            user = getattr(request, "user", None)
-            if not user:
+            # Get user using dependency
+            try:
+                user = await get_current_user_dependency(request)
+            except HTTPException:
                 raise HTTPException(status_code=401, detail="Authentication required")
             
             # Check permission
@@ -112,7 +117,10 @@ def require_role(role_name: str):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Get request from args or kwargs
+            # Get user from dependencies
+            from core.dependencies import get_current_user_dependency
+            
+            # Find request in args or kwargs
             request = None
             for arg in args:
                 if isinstance(arg, Request):
@@ -128,9 +136,10 @@ def require_role(role_name: str):
             if not request:
                 raise HTTPException(status_code=500, detail="Request object not found")
             
-            # Get user from request
-            user = getattr(request, "user", None)
-            if not user:
+            # Get user using dependency
+            try:
+                user = await get_current_user_dependency(request)
+            except HTTPException:
                 raise HTTPException(status_code=401, detail="Authentication required")
             
             # Check role
@@ -142,16 +151,17 @@ def require_role(role_name: str):
     return decorator
 
 
-async def get_current_user(request: Request) -> Optional[User]:
-    """Get current user from request"""
-    return getattr(request, "user", None)
+async def get_current_user(request: Request) -> Optional["User"]:
+    """Get current user from request using dependency injection"""
+    from core.dependencies import get_current_user_optional
+    return await get_current_user_optional(request)
 
 
-async def check_permission(user: User, permission: str) -> bool:
+async def check_permission(user: "User", permission: str) -> bool:
     """Check if user has a specific permission"""
     return user.has_permission(permission)
 
 
-async def check_role(user: User, role_name: str) -> bool:
+async def check_role(user: "User", role_name: str) -> bool:
     """Check if user has a specific role"""
     return user.has_role(role_name) 

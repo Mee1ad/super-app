@@ -12,10 +12,14 @@ from .schemas import (
     ChangelogSummary,
     UnreadChangelogResponse,
     ChangelogPublishRequest,
-    ChangelogPublishResponse
+    ChangelogPublishResponse,
+    AnonymousChangelogStatus,
+    AnonymousChangelogResponse,
+    AnonymousViewRequest
 )
 from .services import ChangelogService
 from core.permissions import require_permission, Permissions
+from core.dependencies import get_current_user_dependency
 
 
 # Initialize service
@@ -25,7 +29,7 @@ changelog_service = ChangelogService()
 @get(
     tags=["Changelog"],
     summary="Get changelog entries",
-    description="Retrieve paginated changelog entries with optional filtering"
+    description="Retrieve paginated changelog entries with filtering options"
 )
 @require_permission(Permissions.CHANGELOG_VIEW)
 async def get_changelog_entries(
@@ -34,20 +38,25 @@ async def get_changelog_entries(
     per_page: int = 20,
     version: Optional[str] = None,
     change_type: Optional[ChangeType] = None,
-    include_drafts: bool = False
+    status: str = "published"
 ) -> ChangelogListResponse:
-    """Get paginated changelog entries"""
+    """Get paginated changelog entries with status filtering"""
     try:
-        # Check if user can view drafts
-        if include_drafts and not request.user.has_permission(Permissions.CHANGELOG_VIEW_DRAFTS):
-            raise HTTPException(status_code=403, detail="Permission to view drafts required")
+        # Get user using dependency
+        user = await get_current_user_dependency(request)
         
-        entries, total = await changelog_service.get_changelog_entries(
+        # Check permissions based on status
+        if status == "drafts" or status == "all":
+            # Check if user can view drafts
+            if not user.has_permission(Permissions.CHANGELOG_VIEW_DRAFTS):
+                raise HTTPException(status_code=403, detail="Permission to view drafts required")
+        
+        entries, total = await changelog_service.get_changelog_entries_by_status(
             page=page,
             per_page=per_page,
             version=version,
             change_type=change_type,
-            include_drafts=include_drafts
+            status=status
         )
         
         has_next = (page * per_page) < total
@@ -62,6 +71,8 @@ async def get_changelog_entries(
             has_prev=has_prev
         )
         
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get changelog entries: {str(e)}")
 
@@ -111,52 +122,24 @@ async def get_changelog_summary(
 
 @get(
     tags=["Changelog"],
-    summary="Get unread changelog entries",
-    description="Get changelog entries that haven't been viewed by the user"
+    summary="Get changelog by version",
+    description="Get all changelog entries for a specific version"
 )
-async def get_unread_changelog(
-    user_identifier: str
-) -> UnreadChangelogResponse:
-    """Get unread changelog entries for a user"""
-    try:
-        unread_entries = await changelog_service.get_unread_entries(user_identifier)
-        
-        latest_version = None
-        if unread_entries:
-            latest_version = unread_entries[0].version
-        
-        return UnreadChangelogResponse(
-            unread_count=len(unread_entries),
-            latest_version=str(latest_version) if latest_version else None,
-            entries=[ChangelogEntryResponse.from_orm(entry) for entry in unread_entries]
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get unread changelog: {str(e)}")
-
-
-@post(
-    tags=["Changelog"],
-    summary="Mark changelog entry as viewed",
-    description="Mark a changelog entry as viewed by a user"
-)
-async def mark_changelog_viewed(
-    data: ChangelogViewCreate
+async def get_changelog_by_version(
+    version: str
 ) -> JSONResponse:
-    """Mark a changelog entry as viewed"""
+    """Get changelog entries for a specific version"""
     try:
-        success = await changelog_service.mark_as_viewed(
-            entry_id=data.entry_id,
-            user_identifier=data.user_identifier
-        )
+        entries = await changelog_service.get_changelog_entries_by_version(version=version)
         
-        if success:
-            return JSONResponse({"message": "Changelog entry marked as viewed"})
-        else:
-            raise HTTPException(status_code=404, detail="Changelog entry not found")
-            
+        return JSONResponse({
+            "version": version,
+            "entries": [ChangelogEntryResponse.from_orm(entry) for entry in entries],
+            "total": len(entries)
+        })
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to mark as viewed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get changelog for version: {str(e)}")
 
 
 @post(
@@ -253,17 +236,19 @@ async def publish_changelog_entry(
     try:
         from datetime import datetime
         
+        # Get user using dependency
+        user = await get_current_user_dependency(request)
+        
         success = await changelog_service.publish_changelog_entry(
             entry_id=data.entry_id,
-            user_id=str(request.user.id)
+            user_id=str(user.id)
         )
         
         if success:
             return ChangelogPublishResponse(
+                success=True,
                 message="Changelog entry published successfully",
-                entry_id=data.entry_id,
-                published_at=datetime.now(),
-                published_by=str(request.user.id)
+                entry_id=data.entry_id
             )
         else:
             raise HTTPException(status_code=404, detail="Changelog entry not found")
@@ -343,4 +328,124 @@ async def update_changelog_entry(
             raise HTTPException(status_code=404, detail="Changelog entry not found")
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update entry: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to update entry: {str(e)}")
+
+
+@get(
+    tags=["Changelog"],
+    summary="Get changelog status",
+    description="Check if user should see changelog based on their view history"
+)
+async def get_changelog_status(
+    request: Request,
+    ip_address: str,
+    user_agent: Optional[str] = None,
+    userAgent: Optional[str] = None
+) -> AnonymousChangelogStatus:
+    """Get changelog status for any user"""
+    try:
+        # Handle both user_agent and userAgent parameters
+        actual_user_agent = user_agent or userAgent
+        if not actual_user_agent:
+            raise HTTPException(status_code=400, detail="user_agent or userAgent parameter is required")
+        
+        status = await changelog_service.get_changelog_status(
+            ip_address=ip_address,
+            user_agent=actual_user_agent
+        )
+        
+        return AnonymousChangelogStatus(**status)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get changelog status: {str(e)}")
+
+
+@get(
+    tags=["Changelog"],
+    summary="Get latest changelog for user",
+    description="Get latest changelog entries for any user. Returns empty if user has seen latest version."
+)
+async def get_latest_changelog_for_user(
+    request: Request,
+    ip_address: str,
+    user_agent: Optional[str] = None,
+    userAgent: Optional[str] = None,
+    limit: int = 10
+) -> AnonymousChangelogResponse:
+    """Get latest changelog entries for any user"""
+    try:
+        # Handle both user_agent and userAgent parameters
+        actual_user_agent = user_agent or userAgent
+        if not actual_user_agent:
+            raise HTTPException(status_code=400, detail="user_agent or userAgent parameter is required")
+        
+        result = await changelog_service.get_latest_changelog_for_user(
+            ip_address=ip_address,
+            user_agent=actual_user_agent,
+            limit=limit
+        )
+        
+        return AnonymousChangelogResponse(
+            entries=[ChangelogEntryResponse.from_orm(entry) for entry in result["entries"]],
+            total=result["total"],
+            latest_version=result["latest_version"],
+            user_version=result["user_version"],
+            has_new_content=result["has_new_content"],
+            reason=result.get("reason")
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get latest changelog: {str(e)}")
+
+
+@post(
+    tags=["Changelog"],
+    summary="Mark changelog as viewed",
+    description="Mark changelog as viewed by any user (updates their latest version seen)"
+)
+async def mark_changelog_viewed(
+    data: AnonymousViewRequest
+) -> JSONResponse:
+    """Mark changelog as viewed by any user"""
+    try:
+        success = await changelog_service.mark_as_viewed(
+            ip_address=data.ip_address,
+            user_agent=data.user_agent
+        )
+        
+        if success:
+            return JSONResponse({"message": "Changelog marked as viewed"})
+        else:
+            raise HTTPException(status_code=404, detail="No changelog entries found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to mark as viewed: {str(e)}")
+
+
+@get(
+    tags=["Changelog"],
+    summary="Debug user views",
+    description="Debug endpoint to check user views in database (development only)"
+)
+async def debug_user_views(
+    request: Request,
+    ip_address: str,
+    user_agent: Optional[str] = None,
+    userAgent: Optional[str] = None
+) -> JSONResponse:
+    """Debug user views in database"""
+    try:
+        # Handle both user_agent and userAgent parameters
+        actual_user_agent = user_agent or userAgent
+        if not actual_user_agent:
+            raise HTTPException(status_code=400, detail="user_agent or userAgent parameter is required")
+        
+        debug_info = await changelog_service.debug_user_views(
+            ip_address=ip_address,
+            user_agent=actual_user_agent
+        )
+        
+        return JSONResponse(debug_info)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to debug user views: {str(e)}") 

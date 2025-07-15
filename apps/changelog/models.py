@@ -44,16 +44,21 @@ class ChangelogEntry(BaseModel):
 
 
 class ChangelogView(BaseModel):
-    """Model for tracking user views of changelog entries"""
+    """Model for tracking user views of changelog entries using IP + User-Agent"""
     objects: ClassVar[Manager] = Manager()
     
-    entry = fields.ForeignKey(
-        "ChangelogEntry",
-        on_delete="cascade",
-        related_name="views"
-    )
-    user_identifier = fields.CharField(max_length=255)  # IP, user ID, or session
-    viewed_at = fields.DateTimeField(auto_now=True)
+    # Hashed IP address for privacy protection
+    hashed_ip = fields.CharField(max_length=64)
+    # Hashed user agent for privacy protection
+    hashed_user_agent = fields.CharField(max_length=64)
+    # Latest version seen by this user
+    latest_version_seen = fields.CharField(max_length=20)
+    # First seen timestamp
+    first_seen = fields.DateTimeField(auto_now=True)
+    # Last seen timestamp
+    last_seen = fields.DateTimeField(auto_now=True)
+    # View count for analytics
+    view_count = fields.IntegerField(default=1)
     
     class Meta:
         tablename = "changelog_views"

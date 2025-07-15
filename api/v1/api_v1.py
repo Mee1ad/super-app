@@ -18,10 +18,13 @@ from apps.food_planner.endpoints import (
 )
 from apps.auth.endpoints import google_login, refresh_token, get_google_auth_url, google_callback
 from apps.changelog.endpoints import (
-    get_changelog_entries, get_changelog_entry, get_changelog_summary,
-    get_unread_changelog, mark_changelog_viewed, process_new_commits,
+    get_changelog_entries, get_changelog_by_version,
+    get_changelog_entry, get_changelog_summary,
+    process_new_commits,
     get_available_versions, get_current_version, publish_changelog_entry,
-    unpublish_changelog_entry, delete_changelog_entry, update_changelog_entry
+    unpublish_changelog_entry, delete_changelog_entry, update_changelog_entry,
+    get_changelog_status, get_latest_changelog_for_user, mark_changelog_viewed,
+    debug_user_views
 )
 
 # V1 API Router - All endpoints under /api/v1/
@@ -81,10 +84,9 @@ v1_routes = [
     
     # Changelog endpoints
     Gateway(handler=get_changelog_entries, path="/changelog"),
+    Gateway(handler=get_changelog_by_version, path="/changelog/version/{version}"),
     Gateway(handler=get_changelog_entry, path="/changelog/{entry_id:uuid}"),
     Gateway(handler=get_changelog_summary, path="/changelog/summary/{version}"),
-    Gateway(handler=get_unread_changelog, path="/changelog/unread"),
-    Gateway(handler=mark_changelog_viewed, path="/changelog/mark-viewed"),
     Gateway(handler=process_new_commits, path="/changelog/process-commits"),
     Gateway(handler=get_available_versions, path="/changelog/versions"),
     Gateway(handler=get_current_version, path="/changelog/current-version"),
@@ -92,4 +94,10 @@ v1_routes = [
     Gateway(handler=unpublish_changelog_entry, path="/changelog/unpublish"),
     Gateway(handler=delete_changelog_entry, path="/changelog/{entry_id:uuid}"),
     Gateway(handler=update_changelog_entry, path="/changelog/{entry_id:uuid}"),
+    
+    # Unified changelog endpoints (for all users)
+    Gateway(handler=get_changelog_status, path="/changelog/status"),
+    Gateway(handler=get_latest_changelog_for_user, path="/changelog/latest"),
+    Gateway(handler=mark_changelog_viewed, path="/changelog/viewed"),
+    Gateway(handler=debug_user_views, path="/changelog/debug"),
 ] 

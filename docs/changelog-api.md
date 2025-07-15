@@ -2,30 +2,58 @@
 
 ## Overview
 
-The Changelog API provides automated changelog generation using Git commits and DeepSeek AI. It fetches git commits, uses DeepSeek to humanize them into readable changelog entries, and tracks user views to show unread changes.
+The Changelog API provides endpoints for managing and displaying changelog entries. The system uses a unified approach that tracks all users (both anonymous and authenticated) using hashed IP addresses and User-Agent strings for privacy protection.
 
-## Features
+## Key Features
 
-- **Automated Git Integration**: Fetches commits from the repository
-- **AI-Powered Humanization**: Uses DeepSeek AI to convert technical commits into user-friendly changelog entries
-- **Semantic Versioning**: Supports MAJOR.MINOR.PATCH versioning
-- **Change Categorization**: Groups changes by type (Added, Changed, Fixed, Removed, etc.)
-- **User View Tracking**: Tracks which changelog entries users have seen
-- **Incremental Processing**: Only processes new commits since the last run
-- **Breaking Change Detection**: Highlights breaking changes with ⚠️ or "Breaking:" prefix
+- **Unified Tracking**: All users are tracked using hashed IP + User-Agent, regardless of authentication status
+- **Privacy Protection**: IP addresses and User-Agent strings are hashed with salts before storage
+- **Version-based Display**: Users only see changelog entries for versions they haven't seen before
+- **Automatic Processing**: Git commits can be automatically processed into changelog entries using AI
+- **Role-based Access**: Different permissions for viewing, publishing, and managing changelog entries
 
-## API Endpoints
+## Authentication & Permissions
 
-### Get Changelog Entries
+The API uses role-based access control with the following permissions:
+
+- `CHANGELOG_VIEW`: View changelog entries (public)
+- `CHANGELOG_CREATE`: Create new changelog entries (admin/editor)
+- `CHANGELOG_UPDATE`: Update existing entries (admin/editor)
+- `CHANGELOG_DELETE`: Delete entries (admin/editor)
+- `CHANGELOG_PUBLISH`: Publish draft entries (admin only)
+
+## Core Endpoints
+
+### 1. Get Changelog Status
+
+Check if a user should see changelog based on their view history.
+
+**Endpoint:** `GET /api/v1/changelog/status`
+
+**Parameters:**
+- `ip_address` (required): User's IP address
+- `user_agent` or `userAgent` (required): User's browser User-Agent string
+
+**Response:**
+```json
+{
+  "should_show": true,
+  "latest_version": "1.2.0",
+  "user_version": "1.1.0",
+  "has_new_content": true
+}
 ```
-GET /api/v1/changelog
-```
 
-**Query Parameters:**
-- `page` (int, default: 1): Page number
-- `per_page` (int, default: 20, max: 100): Items per page
-- `version` (string, optional): Filter by version
-- `change_type` (string, optional): Filter by change type (added, changed, fixed, removed, deprecated, security)
+### 2. Get Latest Changelog for User
+
+Get the latest changelog entries for a user. **First checks if hashed data exists in the database - if it does, returns empty response immediately.**
+
+**Endpoint:** `GET /api/v1/changelog/latest`
+
+**Parameters:**
+- `ip_address` (required): User's IP address
+- `user_agent` or `userAgent` (required): User's browser User-Agent string
+- `limit` (optional): Number of entries to return (default: 10)
 
 **Response:**
 ```json
@@ -33,263 +61,398 @@ GET /api/v1/changelog
   "entries": [
     {
       "id": "uuid",
+      "title": "New Feature Added",
+      "description": "Description of the change",
+      "change_type": "feature",
       "version": "1.2.0",
-      "title": "Add user authentication",
-      "description": "Implemented JWT-based authentication system with Google OAuth support",
-      "change_type": "added",
+      "release_date": "2024-01-15T10:00:00Z",
       "is_breaking": false,
-      "commit_hash": "abc123456789",
-      "commit_date": "2024-01-15T10:30:00Z",
-      "commit_message": "Add user authentication",
-      "release_date": "2024-01-15T10:30:00Z",
-      "created_at": "2024-01-15T10:30:00Z",
-      "updated_at": "2024-01-15T10:30:00Z"
+      "is_published": true
     }
   ],
-  "total": 50,
-  "page": 1,
-  "per_page": 20,
-  "has_next": true,
-  "has_prev": false
-}
-```
-
-### Get Changelog Entry by ID
-```
-GET /api/v1/changelog/{entry_id}
-```
-
-**Response:**
-```json
-{
-  "id": "uuid",
-  "version": "1.2.0",
-  "title": "Add user authentication",
-  "description": "Implemented JWT-based authentication system with Google OAuth support",
-  "change_type": "added",
-  "is_breaking": false,
-  "commit_hash": "abc123456789",
-  "commit_date": "2024-01-15T10:30:00Z",
-  "commit_message": "Add user authentication",
-  "release_date": "2024-01-15T10:30:00Z",
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-15T10:30:00Z"
-}
-```
-
-### Get Changelog Summary for Version
-```
-GET /api/v1/changelog/summary/{version}
-```
-
-**Response:**
-```json
-{
-  "version": "1.2.0",
-  "release_date": "2024-01-15T10:30:00Z",
-  "total_changes": 15,
-  "breaking_changes": 2,
-  "changes_by_type": {
-    "added": 8,
-    "changed": 3,
-    "fixed": 4
-  },
-  "entries": [...]
-}
-```
-
-### Get Unread Changelog Entries
-```
-GET /api/v1/changelog/unread?user_identifier={identifier}
-```
-
-**Query Parameters:**
-- `user_identifier` (string, required): User identifier (IP, user ID, or session)
-
-**Response:**
-```json
-{
-  "unread_count": 5,
+  "total": 1,
   "latest_version": "1.2.0",
-  "entries": [...]
+  "user_version": null,
+  "has_new_content": true,
+  "reason": "new_user"
 }
 ```
 
-### Mark Changelog Entry as Viewed
+**Empty Response (when user has seen changelog before):**
+```json
+{
+  "entries": [],
+  "total": 0,
+  "latest_version": "1.2.0",
+  "user_version": "1.2.0",
+  "has_new_content": false,
+  "reason": "user_already_seen"
+}
 ```
-POST /api/v1/changelog/mark-viewed
-```
+
+**Reason Values:**
+- `new_user`: User has never seen changelog before (shows entries)
+- `user_already_seen`: User has seen changelog before (empty response)
+- `no_latest_version`: No changelog entries exist
+- `error`: An error occurred
+
+### 3. Mark Changelog as Viewed
+
+Mark that a user has viewed the changelog (updates their latest version seen).
+
+**Endpoint:** `POST /api/v1/changelog/viewed`
 
 **Request Body:**
 ```json
 {
-  "entry_id": "uuid",
-  "user_identifier": "user-123"
+  "ip_address": "192.168.1.1",
+  "user_agent": "Mozilla/5.0..."
 }
 ```
 
 **Response:**
 ```json
 {
-  "message": "Changelog entry marked as viewed"
+  "message": "Changelog marked as viewed"
 }
 ```
 
-### Process New Git Commits
-```
-POST /api/v1/changelog/process-commits
-```
+### 4. Debug User Views
+
+Debug endpoint to check user views in database (development only).
+
+**Endpoint:** `GET /api/v1/changelog/debug`
+
+**Parameters:**
+- `ip_address` (required): User's IP address
+- `user_agent` or `userAgent` (required): User's browser User-Agent string
 
 **Response:**
 ```json
 {
-  "message": "Successfully processed 3 new changelog entries",
-  "created_count": 3
-}
-```
-
-### Get Available Versions
-```
-GET /api/v1/changelog/versions
-```
-
-**Response:**
-```json
-{
-  "versions": [
+  "ip_address": "192.168.1...",
+  "user_agent": "Mozilla/5.0...",
+  "hashed_ip": "a1b2c3d4...",
+  "hashed_user_agent": "e5f6g7h8...",
+  "latest_version": "1.2.0",
+  "total_views": 1,
+  "views": [
     {
-      "version": "1.2.0",
-      "release_date": "2024-01-15T10:30:00Z",
-      "total_changes": 15,
-      "breaking_changes": 2
+      "id": "uuid",
+      "latest_version_seen": "1.2.0",
+      "view_count": 3,
+      "first_seen": "2024-01-15T10:00:00Z",
+      "last_seen": "2024-01-15T11:00:00Z"
     }
-  ],
-  "total_versions": 5
+  ]
 }
 ```
 
-### Get Current Version
-```
-GET /api/v1/changelog/current-version
+## Frontend Usage Examples
+
+### React Example
+
+```jsx
+import React, { useState, useEffect } from 'react';
+
+const ChangelogModal = () => {
+  const [changelog, setChangelog] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    checkChangelog();
+  }, []);
+
+  const checkChangelog = async () => {
+    try {
+      // Get user's IP and User-Agent
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const { ip } = await ipResponse.json();
+      const userAgent = navigator.userAgent;
+
+      // Check if user should see changelog
+      const statusResponse = await fetch(
+        `/api/v1/changelog/status?ip_address=${ip}&user_agent=${encodeURIComponent(userAgent)}`
+      );
+      const status = await statusResponse.json();
+
+      if (status.should_show) {
+        // Get changelog entries
+        const changelogResponse = await fetch(
+          `/api/v1/changelog/latest?ip_address=${ip}&user_agent=${encodeURIComponent(userAgent)}`
+        );
+        const changelogData = await changelogResponse.json();
+        
+        // Check the reason for the response
+        if (changelogData.reason === 'new_user' && changelogData.entries.length > 0) {
+          setChangelog(changelogData);
+          setShowModal(true);
+        } else if (changelogData.reason === 'user_already_seen') {
+          console.log('User has already seen the changelog');
+          // Don't show modal - user has seen it before
+        } else {
+          console.log('No new changelog content:', changelogData.reason);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking changelog:', error);
+    }
+  };
+
+  const markAsViewed = async () => {
+    try {
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const { ip } = await ipResponse.json();
+      const userAgent = navigator.userAgent;
+
+      await fetch('/api/v1/changelog/viewed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip_address: ip, user_agent: userAgent })
+      });
+
+      setShowModal(false);
+    } catch (error) {
+      console.error('Error marking as viewed:', error);
+    }
+  };
+
+  if (!showModal || !changelog) return null;
+
+  return (
+    <div className="changelog-modal">
+      <div className="changelog-content">
+        <h2>What's New in v{changelog.latest_version}</h2>
+        <div className="changelog-entries">
+          {changelog.entries.map(entry => (
+            <div key={entry.id} className={`changelog-entry ${entry.change_type}`}>
+              <h3>{entry.title}</h3>
+              <p>{entry.description}</p>
+              {entry.is_breaking && <span className="breaking-badge">Breaking Change</span>}
+            </div>
+          ))}
+        </div>
+        <button onClick={markAsViewed}>Got it!</button>
+      </div>
+    </div>
+  );
+};
+
+export default ChangelogModal;
 ```
 
-**Response:**
-```json
-{
-  "version": "1.2.0",
-  "source": "git_tags"
+### Vue.js Example
+
+```vue
+<template>
+  <div v-if="showModal" class="changelog-modal">
+    <div class="changelog-content">
+      <h2>What's New in v{{ changelog?.latest_version }}</h2>
+      <div class="changelog-entries">
+        <div 
+          v-for="entry in changelog?.entries" 
+          :key="entry.id" 
+          :class="['changelog-entry', entry.change_type]"
+        >
+          <h3>{{ entry.title }}</h3>
+          <p>{{ entry.description }}</p>
+          <span v-if="entry.is_breaking" class="breaking-badge">Breaking Change</span>
+        </div>
+      </div>
+      <button @click="markAsViewed">Got it!</button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      changelog: null,
+      showModal: false
+    };
+  },
+  async mounted() {
+    await this.checkChangelog();
+  },
+  methods: {
+    async checkChangelog() {
+      try {
+        // Get user's IP and User-Agent
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const { ip } = await ipResponse.json();
+        const userAgent = navigator.userAgent;
+
+        // Check if user should see changelog
+        const statusResponse = await fetch(
+          `/api/v1/changelog/status?ip_address=${ip}&user_agent=${encodeURIComponent(userAgent)}`
+        );
+        const status = await statusResponse.json();
+
+        if (status.should_show) {
+          // Get changelog entries
+          const changelogResponse = await fetch(
+            `/api/v1/changelog/latest?ip_address=${ip}&user_agent=${encodeURIComponent(userAgent)}`
+          );
+          const changelogData = await changelogResponse.json();
+          
+          // Check the reason for the response
+          if (changelogData.reason === 'new_user' && changelogData.entries.length > 0) {
+            this.changelog = changelogData;
+            this.showModal = true;
+          } else if (changelogData.reason === 'user_already_seen') {
+            console.log('User has already seen the changelog');
+            // Don't show modal - user has seen it before
+          } else {
+            console.log('No new changelog content:', changelogData.reason);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking changelog:', error);
+      }
+    },
+    async markAsViewed() {
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const { ip } = await ipResponse.json();
+        const userAgent = navigator.userAgent;
+
+        await fetch('/api/v1/changelog/viewed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip_address: ip, user_agent: userAgent })
+        });
+
+        this.showModal = false;
+      } catch (error) {
+        console.error('Error marking as viewed:', error);
+      }
+    }
+  }
+};
+</script>
+```
+
+## CSS Styling
+
+```css
+.changelog-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.changelog-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.changelog-entries {
+  margin: 20px 0;
+}
+
+.changelog-entry {
+  padding: 16px;
+  margin: 12px 0;
+  border-radius: 6px;
+  border-left: 4px solid #ddd;
+}
+
+.changelog-entry.feature {
+  background: #f0f9ff;
+  border-left-color: #3b82f6;
+}
+
+.changelog-entry.bugfix {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+
+.changelog-entry.improvement {
+  background: #f0fdf4;
+  border-left-color: #22c55e;
+}
+
+.breaking-badge {
+  background: #dc2626;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+.changelog-content button {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.changelog-content button:hover {
+  background: #2563eb;
 }
 ```
 
 ## Configuration
 
-### Environment Variables
+The system uses the following configuration settings:
 
-Add the following to your `.env` file:
-
-```env
-# DeepSeek AI API Key
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
+```python
+# In your settings file
+ANONYMOUS_IP_SALT = "your-secure-ip-salt-here"
+ANONYMOUS_USER_AGENT_SALT = "your-secure-ua-salt-here"
 ```
 
-### Database Migration
+## Privacy Considerations
 
-Run the changelog migration to create the required tables:
-
-```bash
-python db/migrate_changelog.py
-```
-
-## Usage Examples
-
-### Frontend Integration
-
-```javascript
-// Get unread changelog entries
-const response = await fetch('/api/v1/changelog/unread?user_identifier=user-123');
-const unreadData = await response.json();
-
-if (unreadData.unread_count > 0) {
-  // Show notification badge
-  showNotificationBadge(unreadData.unread_count);
-  
-  // Display changelog modal
-  showChangelogModal(unreadData.entries);
-}
-
-// Mark entry as viewed when user reads it
-await fetch('/api/v1/changelog/mark-viewed', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    entry_id: 'entry-uuid',
-    user_identifier: 'user-123'
-  })
-});
-```
-
-### Automated Processing
-
-Set up a cron job or CI/CD pipeline to process new commits:
-
-```bash
-# Process new commits and create changelog entries
-curl -X POST http://your-api/api/v1/changelog/process-commits
-```
-
-## Change Types
-
-The API supports the following change types:
-
-- **added**: New features or functionality
-- **changed**: Changes to existing functionality
-- **fixed**: Bug fixes
-- **removed**: Removed features or functionality
-- **deprecated**: Deprecated features (will be removed in future)
-- **security**: Security-related changes
-
-## Breaking Changes
-
-Breaking changes are automatically detected and marked with:
-- `is_breaking: true` in the API response
-- ⚠️ emoji or "Breaking:" prefix in the title
-- Special highlighting in the frontend
+1. **Data Minimization**: Only hashed values are stored, never raw IP addresses or User-Agent strings
+2. **Salt Protection**: Each hash uses a unique salt for additional security
+3. **No Personal Data**: No personally identifiable information is stored
+4. **Automatic Cleanup**: Consider implementing data retention policies
+5. **Transparency**: Update your privacy policy to mention changelog tracking
 
 ## Best Practices
 
-1. **Regular Processing**: Run the process-commits endpoint regularly (e.g., on every deployment)
-2. **User Identification**: Use consistent user identifiers (user ID, session ID, or IP)
-3. **Version Management**: Use semantic versioning for your releases
-4. **Commit Messages**: Write clear, descriptive commit messages for better AI processing
-5. **Frontend Integration**: Show unread changelog notifications to keep users informed
+1. **Error Handling**: Always handle API errors gracefully in frontend code
+2. **Loading States**: Show loading indicators while checking changelog status
+3. **Fallback**: Provide fallback behavior if changelog API is unavailable
+4. **Performance**: Cache changelog status to avoid repeated API calls
+5. **Accessibility**: Ensure changelog modal is keyboard accessible and screen reader friendly
+6. **Mobile**: Test changelog display on mobile devices
+7. **Analytics**: Monitor changelog view rates and user engagement
 
-## Error Handling
+## Troubleshooting
 
-The API returns appropriate HTTP status codes:
+### Common Issues
 
-- `200`: Success
-- `400`: Bad request (invalid parameters)
-- `404`: Not found (entry not found)
-- `500`: Internal server error
+1. **404 Errors**: Ensure you're using the correct endpoint paths
+2. **Validation Errors**: Check that `ip_address` and `user_agent` parameters are provided
+3. **Empty Responses**: This is normal if user has already seen the latest version
+4. **Hash Mismatches**: Ensure salts are consistent across deployments
 
-Error responses include a `detail` field with the error message:
+### Debug Endpoint
 
-```json
-{
-  "detail": "Failed to process commits: DeepSeek API error"
-}
-```
-
-## Testing
-
-Run the test script to verify functionality:
+Use the debug endpoint to inspect user views in the database:
 
 ```bash
-python test_changelog.py
+curl "http://localhost:8000/api/v1/changelog/debug?ip_address=192.168.1.1&user_agent=Mozilla/5.0..."
 ```
 
-This will test:
-- Git service functionality
-- DeepSeek service initialization
-- Changelog service operations
-- Database operations 
+This will show you the hashed values and view history for debugging purposes. 

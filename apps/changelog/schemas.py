@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -22,12 +22,17 @@ class ChangelogEntryCreate(ChangelogEntryBase):
     release_date: datetime = Field(..., description="Release date")
 
 
-class ChangelogEntryResponse(ChangelogEntryBase):
-    """Schema for changelog entry responses"""
+class ChangelogEntryResponse(BaseModel):
+    """Response schema for changelog entries"""
     id: str
+    version: str
+    title: str
+    description: str
+    change_type: ChangeType
     commit_hash: str
     commit_date: datetime
     commit_message: str
+    is_breaking: bool
     release_date: datetime
     is_published: bool
     published_by: Optional[str] = None
@@ -40,20 +45,20 @@ class ChangelogEntryResponse(ChangelogEntryBase):
     
     @classmethod
     def from_orm(cls, obj):
-        """Convert Edgy model to response schema with proper UUID handling"""
+        """Convert Edgy model to response schema with proper UUID and User handling"""
         data = {
             "id": str(obj.id),  # Convert UUID to string
             "version": obj.version,
             "title": obj.title,
             "description": obj.description,
             "change_type": obj.change_type,
-            "is_breaking": obj.is_breaking,
             "commit_hash": obj.commit_hash,
             "commit_date": obj.commit_date,
             "commit_message": obj.commit_message,
+            "is_breaking": obj.is_breaking,
             "release_date": obj.release_date,
             "is_published": obj.is_published,
-            "published_by": str(obj.published_by.id) if obj.published_by else None,
+            "published_by": str(obj.published_by.id) if obj.published_by else None,  # Convert User to string ID
             "published_at": obj.published_at,
             "created_at": obj.created_at,
             "updated_at": obj.updated_at
@@ -62,9 +67,9 @@ class ChangelogEntryResponse(ChangelogEntryBase):
 
 
 class ChangelogViewCreate(BaseModel):
-    """Schema for marking changelog entries as viewed"""
-    entry_id: str = Field(..., description="Changelog entry ID")
-    user_identifier: str = Field(..., description="User identifier (IP, user ID, or session)")
+    """Schema for creating changelog views"""
+    entry_id: str
+    user_identifier: str
 
 
 class ChangelogViewResponse(BaseModel):
@@ -90,17 +95,17 @@ class ChangelogViewResponse(BaseModel):
 
 
 class ChangelogSummary(BaseModel):
-    """Schema for changelog summary responses"""
+    """Response schema for changelog summary"""
     version: str
-    release_date: datetime
+    release_date: Optional[datetime]
     total_changes: int
     breaking_changes: int
-    changes_by_type: dict[str, int]
+    changes_by_type: Dict[str, int]
     entries: List[ChangelogEntryResponse]
 
 
 class ChangelogListResponse(BaseModel):
-    """Schema for paginated changelog list responses"""
+    """Response schema for paginated changelog lists"""
     entries: List[ChangelogEntryResponse]
     total: int
     page: int
@@ -110,20 +115,45 @@ class ChangelogListResponse(BaseModel):
 
 
 class UnreadChangelogResponse(BaseModel):
-    """Schema for unread changelog entries"""
-    unread_count: int
-    latest_version: Optional[str] = None
+    """Response schema for unread changelog entries"""
     entries: List[ChangelogEntryResponse]
+    total: int
 
 
 class ChangelogPublishRequest(BaseModel):
-    """Schema for publishing changelog entries"""
-    entry_id: str = Field(..., description="Changelog entry ID to publish")
+    """Request schema for publishing changelog entries"""
+    entry_id: str
 
 
 class ChangelogPublishResponse(BaseModel):
-    """Schema for publish response"""
+    """Response schema for publishing changelog entries"""
+    success: bool
     message: str
     entry_id: str
-    published_at: datetime
-    published_by: str 
+
+
+class AnonymousChangelogStatus(BaseModel):
+    """Response schema for anonymous changelog status"""
+    should_show: bool
+    latest_version: Optional[str]
+    user_version: Optional[str]
+    has_new_content: bool
+
+
+class AnonymousChangelogResponse(BaseModel):
+    """Response schema for anonymous changelog entries"""
+    entries: List[ChangelogEntryResponse]
+    total: int
+    latest_version: Optional[str]
+    user_version: Optional[str]
+    has_new_content: bool
+    reason: Optional[str] = Field(None, description="Reason for the response (new_user, user_already_seen, no_latest_version, error)")
+
+
+class AnonymousViewRequest(BaseModel):
+    """Request schema for marking anonymous changelog as viewed"""
+    ip_address: str
+    user_agent: str = Field(alias="userAgent")
+    
+    class Config:
+        populate_by_name = True 

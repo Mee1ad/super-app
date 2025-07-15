@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     db_user: str = os.getenv("DB_USER", "postgres")
     db_password: str = os.getenv("DB_PASSWORD", "admin")
 
+    anonymous_ip_salt: str = os.getenv("ANONYMOUS_IP_SALT", "your_secure_random_ip_salt_here")
+    anonymous_user_agent_salt: str = os.getenv("ANONYMOUS_USER_AGENT_SALT", "your_secure_random_ua_salt_here")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

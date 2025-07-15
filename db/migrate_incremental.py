@@ -41,7 +41,9 @@ def register_migrations():
             "db/migrations/002_add_user_authentication.py", 
             "db/migrations/003_add_changelog_publishing.py",
             "db/migrations/004_seed_default_roles.py",
-            "db/migrations/005_seed_initial_data.py"
+            "db/migrations/005_seed_initial_data.py",
+            "db/migrations/006_add_anonymous_changelog_views.py",
+            "db/migrations/007_unified_changelog_tracking.py"
         ]
         
         for migration_file in migration_files:
