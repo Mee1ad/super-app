@@ -34,14 +34,13 @@ class InitialSchemaMigration(Migration):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # Create moods table with description column
+        # Create moods table
         await models_registry.database.execute('''
             CREATE TABLE IF NOT EXISTS moods (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                 name VARCHAR(100) NOT NULL,
                 emoji VARCHAR(10),
                 color VARCHAR(20),
-                description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )

@@ -42,11 +42,12 @@ class SeedInitialDataMigration(Migration):
             
             if not existing_mood:
                 await database.execute("""
-                    INSERT INTO moods (name, description)
-                    VALUES (:name, :description)
+                    INSERT INTO moods (name, emoji, color)
+                    VALUES (:name, :emoji, :color)
                 """, {
                     "name": mood_name,
-                    "description": mood_description
+                    "emoji": "😊",  # Default emoji
+                    "color": "#4CAF50"  # Default color
                 })
         
         # Seed meal types

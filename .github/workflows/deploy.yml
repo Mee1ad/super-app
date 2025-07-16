@@ -41,6 +41,14 @@ jobs:
         run: |
           pytest --cov-append --cov=apps --cov=db --cov=core --cov-report=xml --cov-report=term-missing tests/integration/ -v --disable-warnings --tb=short
 
+      - name: Run migration tests
+        run: |
+          pytest --cov-append --cov=apps --cov=db --cov=core --cov-report=xml --cov-report=term-missing tests/unit/test_migrations.py -v --disable-warnings --tb=short
+
+      - name: Run migration integration tests
+        run: |
+          pytest --cov-append --cov=apps --cov=db --cov=core --cov-report=xml --cov-report=term-missing tests/integration/test_migration_integration.py -v --disable-warnings --tb=short
+
   deploy:
     runs-on: ubuntu-latest
     needs: test

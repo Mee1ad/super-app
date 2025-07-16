@@ -166,6 +166,34 @@ class MigrationManager:
             logger.error(f"Error ensuring migrations table: {e}")
             raise
     
+    async def fix_table_schemas(self) -> None:
+        """Fix common table schema issues"""
+        try:
+            # Fix moods table schema
+            logger.info("🔄 Checking moods table schema...")
+            
+            # Check if description column exists and remove it
+            result = await database.fetch_one("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'moods' AND column_name = 'description'
+            """)
+            
+            if result is not None:
+                logger.info("🔄 Removing description column from moods table...")
+                await database.execute("ALTER TABLE moods DROP COLUMN description")
+                logger.info("✅ Description column removed from moods table")
+            
+            # Ensure required columns exist
+            await database.execute("ALTER TABLE moods ADD COLUMN IF NOT EXISTS emoji VARCHAR(10)")
+            await database.execute("ALTER TABLE moods ADD COLUMN IF NOT EXISTS color VARCHAR(20)")
+            
+            logger.info("✅ Moods table schema fixed")
+            
+        except Exception as e:
+            logger.warning(f"Warning: Could not fix table schemas: {e}")
+            # Don't fail the migration process for schema fixes
+    
     async def get_applied_migrations(self) -> List[str]:
         """Get list of applied migration versions"""
         try:
@@ -191,6 +219,9 @@ class MigrationManager:
     async def migrate(self, target_version: Optional[str] = None) -> None:
         """Run migrations up to target version"""
         await self.ensure_migration_table()
+        
+        # Fix any schema issues before running migrations
+        await self.fix_table_schemas()
         
         applied_migrations = await self.get_applied_migrations()
         pending_migrations = []
