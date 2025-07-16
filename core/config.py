@@ -85,4 +85,5 @@ class Settings(BaseSettings):
         return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 # Create settings instance
-settings = Settings() 
+settings = Settings()
+print('client_url:', settings.client_url)
