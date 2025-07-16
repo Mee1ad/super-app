@@ -87,3 +87,6 @@ class Settings(BaseSettings):
 # Create settings instance
 settings = Settings()
 print('client_url:', settings.client_url)
+print('google_client_id:', settings.google_client_id)
+print('google_client_secret:', settings.google_client_secret)
+print('google_redirect_uri:', settings.google_redirect_uri)
