@@ -73,7 +73,45 @@ jobs:
             cd ${{ secrets.BACKEND_DIR }}
             docker compose build
             docker compose up -d --force-recreate
-            docker compose exec api python db/migrate_incremental.py migrate
+            
+            # Wait for container to be healthy before running migrations
+            echo "Waiting for container to be healthy..."
+            for i in {1..30}; do
+              if docker compose ps api | grep -q "healthy"; then
+                echo "Container is healthy. Proceeding with migrations..."
+                break
+              elif [ $i -eq 30 ]; then
+                echo "Container failed to become healthy within 30 attempts"
+                docker compose logs api
+                exit 1
+              else
+                echo "Container not healthy yet. Waiting... ($i/30)"
+                sleep 2
+              fi
+            done
+            
+            # Run migrations with retry mechanism
+            echo "Running database migrations..."
+            for i in {1..5}; do
+              if docker compose exec -T api python db/migrate_incremental.py migrate; then
+                echo "Migrations completed successfully"
+                break
+              else
+                echo "Migration attempt $i failed. Retrying in 5s..."
+                if [ $i -eq 5 ]; then
+                  echo "All migration attempts failed"
+                  docker compose logs api
+                  exit 1
+                fi
+                sleep 5
+              fi
+            done
+            
+            # Alternative: Use the migration script if the above fails
+            # echo "Trying alternative migration approach..."
+            # docker compose exec -T api ./scripts/run-migrations.sh
+            
+            # Final health check
             sleep 3
             for i in {1..5}; do
               if curl --fail http://localhost/ping; then
