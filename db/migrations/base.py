@@ -123,26 +123,47 @@ class MigrationManager:
         self.migrations.sort(key=lambda m: m.version)
     
     async def ensure_migration_table(self) -> None:
-        """Ensure the migrations table exists"""
+        """Ensure the migrations table exists with correct schema"""
         if self._migration_table_created:
             return
         
         try:
-            await database.execute("""
-                CREATE TABLE IF NOT EXISTS migrations (
-                    id SERIAL PRIMARY KEY,
-                    version VARCHAR(50) UNIQUE NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    dependencies TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+            # Check if table exists and has correct schema
+            result = await database.fetch_one("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'migrations' AND column_name = 'version'
             """)
+            
+            if result is None:
+                # Table doesn't exist or has wrong schema, recreate it
+                logger.info("🔄 Migrations table doesn't exist or has wrong schema, recreating...")
+                await database.execute("DROP TABLE IF EXISTS migrations")
+                
+                await database.execute("""
+                    CREATE TABLE migrations (
+                        id SERIAL PRIMARY KEY,
+                        version VARCHAR(50) UNIQUE NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        description TEXT,
+                        dependencies TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Create indexes
+                await database.execute("CREATE INDEX idx_migrations_version ON migrations(version)")
+                await database.execute("CREATE INDEX idx_migrations_applied_at ON migrations(applied_at)")
+                
+                logger.info("✅ Migrations table created with correct schema")
+            else:
+                logger.info("✅ Migrations table exists with correct schema")
+            
             self._migration_table_created = True
-            logger.info("✅ Migrations table ensured")
+            
         except Exception as e:
-            logger.error(f"Error creating migrations table: {e}")
+            logger.error(f"Error ensuring migrations table: {e}")
             raise
     
     async def get_applied_migrations(self) -> List[str]:
