@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 
 class TokenResponse(BaseModel):
@@ -7,6 +7,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    model_config = ConfigDict()
 
 class UserResponse(BaseModel):
     """User information response"""
@@ -16,16 +17,20 @@ class UserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     role_name: Optional[str] = None
+    model_config = ConfigDict()
 
 class GoogleAuthRequest(BaseModel):
     """Google OAuth authorization code request"""
     code: str
+    model_config = ConfigDict()
 
 class RefreshTokenRequest(BaseModel):
     """Refresh token request"""
     refresh_token: str
+    model_config = ConfigDict()
 
 class LoginResponse(BaseModel):
     """Login response with user and tokens"""
     user: UserResponse
-    tokens: TokenResponse 
+    tokens: TokenResponse
+    model_config = ConfigDict() 

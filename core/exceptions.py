@@ -1,5 +1,5 @@
-from esmerald import APIException, Request, Response
-from esmerald.exceptions import HTTPException
+from esmerald import HTTPException, Request, Response
+from esmerald.exceptions import HTTPException as EsmeraldHTTPException
 from typing import Any, Dict, Optional
 import logging
 from core.sentry_utils import capture_error, set_context
@@ -45,13 +45,13 @@ class SentryExceptionHandler:
         )
         
         # Return appropriate error response
-        if isinstance(exc, APIException):
+        if isinstance(exc, HTTPException):
             return Response(
                 content={"detail": str(exc.detail)},
                 status_code=exc.status_code,
                 media_type="application/json"
             )
-        elif isinstance(exc, HTTPException):
+        elif isinstance(exc, EsmeraldHTTPException):
             return Response(
                 content={"detail": str(exc.detail)},
                 status_code=exc.status_code,
@@ -72,33 +72,33 @@ class SentryExceptionHandler:
 # Global exception handler instance
 sentry_exception_handler = SentryExceptionHandler()
 
-# Custom API exceptions
-class ValidationError(APIException):
+# Custom HTTP exceptions
+class ValidationError(HTTPException):
     """Raised when request validation fails"""
     status_code = 422
     detail = "Validation error"
 
-class AuthenticationError(APIException):
+class AuthenticationError(HTTPException):
     """Raised when authentication fails"""
     status_code = 401
     detail = "Authentication required"
 
-class AuthorizationError(APIException):
+class AuthorizationError(HTTPException):
     """Raised when user lacks required permissions"""
     status_code = 403
     detail = "Insufficient permissions"
 
-class NotFoundError(APIException):
+class NotFoundError(HTTPException):
     """Raised when a resource is not found"""
     status_code = 404
     detail = "Resource not found"
 
-class ConflictError(APIException):
+class ConflictError(HTTPException):
     """Raised when there's a resource conflict"""
     status_code = 409
     detail = "Resource conflict"
 
-class RateLimitError(APIException):
+class RateLimitError(HTTPException):
     """Raised when rate limit is exceeded"""
     status_code = 429
     detail = "Rate limit exceeded" 

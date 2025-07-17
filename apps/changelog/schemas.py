@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .models import ChangeType
 
@@ -40,8 +40,7 @@ class ChangelogEntryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
     
     @classmethod
     def from_orm(cls, obj):
@@ -79,8 +78,7 @@ class ChangelogViewResponse(BaseModel):
     user_identifier: str
     viewed_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
     
     @classmethod
     def from_orm(cls, obj):
@@ -155,5 +153,4 @@ class AnonymousViewRequest(BaseModel):
     ip_address: str
     user_agent: str = Field(alias="userAgent")
     
-    class Config:
-        populate_by_name = True 
+    model_config = ConfigDict(populate_by_name=True) 

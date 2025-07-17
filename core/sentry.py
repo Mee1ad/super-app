@@ -53,8 +53,6 @@ def init_sentry():
             send_default_pii=True,
             # Enable debug mode in development
             debug=settings.sentry_debug,
-            # Enable tracing
-            enable_tracing=True,
             # Additional production settings
             before_send=before_send_filter,
             before_breadcrumb=before_breadcrumb_filter,

@@ -10,15 +10,18 @@ from pydantic import BaseModel, Field, ConfigDict
 class CategoryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Name of the category")
     emoji: str = Field(..., min_length=1, max_length=10, description="Emoji icon for the category")
+    model_config = ConfigDict()
 
 
 class CategoryCreate(CategoryBase):
     id: str = Field(..., min_length=1, max_length=50, description="Unique identifier for the category")
+    model_config = ConfigDict()
 
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="New name for the category")
     emoji: Optional[str] = Field(None, min_length=1, max_length=10, description="New emoji for the category")
+    model_config = ConfigDict()
 
 
 class CategoryResponse(CategoryBase):
@@ -35,6 +38,7 @@ class IdeaBase(BaseModel):
     description: Optional[str] = Field(None, description="Optional description of the idea")
     category: str = Field(..., description="Category ID for the idea")
     tags: List[str] = Field(default_factory=list, description="List of tags for the idea")
+    model_config = ConfigDict()
 
 
 class IdeaCreate(IdeaBase):
@@ -46,6 +50,41 @@ class IdeaUpdate(BaseModel):
     description: Optional[str] = Field(None, description="New description for the idea")
     category: Optional[str] = Field(None, description="New category ID for the idea")
     tags: Optional[List[str]] = Field(None, description="New tags for the idea")
+    model_config = ConfigDict()
+    
+    @classmethod
+    def model_validate_from_orm(cls, obj):
+        """Extract data from Edgy ORM model with proper category_id, category, and user_id handling"""
+        data = {}
+        for field_name in cls.model_fields.keys():
+            if field_name == 'user_id':
+                if hasattr(obj, 'user_id') and obj.user_id:
+                    data['user_id'] = getattr(obj.user_id, 'id', obj.user_id)
+                elif hasattr(obj, 'user_id'):
+                    data['user_id'] = getattr(obj, 'user_id')
+            elif field_name == 'category_id':
+                # Special handling for category_id - extract string from ForeignKey field
+                if hasattr(obj, 'category'):
+                    category_value = getattr(obj, 'category')
+                    if hasattr(category_value, 'id'):
+                        data['category_id'] = category_value.id
+                    else:
+                        data['category_id'] = category_value
+                elif hasattr(obj, 'category_id'):
+                    data['category_id'] = getattr(obj, 'category_id')
+            elif field_name == 'category':
+                # Always set category as the category id (string)
+                if hasattr(obj, 'category'):
+                    category_value = getattr(obj, 'category')
+                    if hasattr(category_value, 'id'):
+                        data['category'] = category_value.id
+                    else:
+                        data['category'] = category_value
+                elif hasattr(obj, 'category_id'):
+                    data['category'] = getattr(obj, 'category_id')
+            elif hasattr(obj, field_name):
+                data[field_name] = getattr(obj, field_name)
+        return cls.model_validate(data)
 
 
 class IdeaResponse(IdeaBase):
@@ -54,7 +93,6 @@ class IdeaResponse(IdeaBase):
     category_id: Optional[str] = Field(None, description="ID of the category")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     
     @classmethod
@@ -98,15 +136,16 @@ class PaginationMeta(BaseModel):
     page: int = Field(..., description="Current page number")
     limit: int = Field(..., description="Number of items per page")
     pages: int = Field(..., description="Total number of pages")
-
+    model_config = ConfigDict()
 
 class IdeasResponse(BaseModel):
     ideas: List[IdeaResponse] = Field(..., description="Array of ideas")
     meta: PaginationMeta = Field(..., description="Pagination metadata")
-
+    model_config = ConfigDict()
 
 class CategoriesResponse(BaseModel):
     categories: List[CategoryResponse] = Field(..., description="Array of categories")
+    model_config = ConfigDict()
 
 
 # Error Response Schemas
@@ -114,12 +153,13 @@ class ErrorDetail(BaseModel):
     field: Optional[str] = Field(None, description="Field name that caused the error")
     issue: str = Field(..., description="Description of the validation issue")
     value: Optional[str] = Field(None, description="The value that caused the error")
-
+    model_config = ConfigDict()
 
 class ErrorResponse(BaseModel):
     error: dict = Field(..., description="Error information")
     request_id: str = Field(..., description="Unique request identifier for support")
     timestamp: datetime = Field(..., description="Error timestamp")
+    model_config = ConfigDict()
 
 
 class ValidationErrorResponse(ErrorResponse):

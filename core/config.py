@@ -5,6 +5,7 @@ import sys
 from typing import Optional
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file='.env', env_file_encoding='utf-8')
     # Environment
     environment: str = "development"
     debug: bool = os.getenv("DEBUG", "false").lower() in ("1", "true", "yes", "on")
@@ -48,12 +49,6 @@ class Settings(BaseSettings):
     
 
 
-    model_config = {
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "extra": "allow"
-    }
-    
     @property
     def is_production(self) -> bool:
         """Check if running in production environment"""
