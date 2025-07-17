@@ -70,11 +70,11 @@ class SeedInitialDataMigration(Migration):
         
         # Seed meal types
         meal_types_data = [
-            {"name": "breakfast", "emoji": "🌅", "time": "08:00", "description": "Morning meal"},
-            {"name": "lunch", "emoji": "🍕", "time": "12:00", "description": "Midday meal"},
-            {"name": "dinner", "emoji": "🍽️", "time": "18:00", "description": "Evening meal"},
-            {"name": "snack", "emoji": "☕", "time": "15:00", "description": "Light snack"},
-            {"name": "dessert", "emoji": "🍰", "time": "20:00", "description": "Sweet treat"}
+            {"name": "breakfast", "emoji": "🌅", "time": "08:00"},
+            {"name": "lunch", "emoji": "🍕", "time": "12:00"},
+            {"name": "dinner", "emoji": "🍽️", "time": "18:00"},
+            {"name": "snack", "emoji": "☕", "time": "15:00"},
+            {"name": "dessert", "emoji": "🍰", "time": "20:00"}
         ]
         
         for meal_data in meal_types_data:
