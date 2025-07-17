@@ -30,38 +30,13 @@ class InitialSchemaMigration(Migration):
             # Create PostgreSQL extension
             await self.database.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
         
-        # Create roles table first
+        # Create roles table first (this one needs manual creation)
         await self.database.execute(f'''
             CREATE TABLE IF NOT EXISTS roles (
                 id TEXT PRIMARY KEY DEFAULT {uuid_func},
                 name VARCHAR(255) UNIQUE NOT NULL,
                 description TEXT,
                 permissions TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT {timestamp_default},
-                updated_at TIMESTAMP DEFAULT {timestamp_default}
-            )
-        ''')
-        
-        # Create moods table
-        await self.database.execute(f'''
-            CREATE TABLE IF NOT EXISTS moods (
-                id TEXT PRIMARY KEY DEFAULT {uuid_func},
-                name VARCHAR(100) NOT NULL,
-                emoji VARCHAR(10),
-                color VARCHAR(20),
-                created_at TIMESTAMP DEFAULT {timestamp_default},
-                updated_at TIMESTAMP DEFAULT {timestamp_default}
-            )
-        ''')
-        
-        # Create meal_types table with description column
-        await self.database.execute(f'''
-            CREATE TABLE IF NOT EXISTS meal_types (
-                id TEXT PRIMARY KEY DEFAULT {uuid_func},
-                name VARCHAR(100) UNIQUE NOT NULL,
-                emoji VARCHAR(10),
-                time VARCHAR(10),
-                description TEXT,
                 created_at TIMESTAMP DEFAULT {timestamp_default},
                 updated_at TIMESTAMP DEFAULT {timestamp_default}
             )
@@ -75,7 +50,7 @@ class InitialSchemaMigration(Migration):
         from apps.diary.models import Mood, DiaryEntry
         from apps.food_planner.models import MealType, FoodEntry
         
-        # Create all other tables using the registry
+        # Create all other tables using the registry (including moods and meal_types)
         await models_registry.create_all()
     
     async def down(self) -> None:

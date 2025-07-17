@@ -11,7 +11,6 @@ class Mood(BaseModel):
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
     color = fields.CharField(max_length=20)
-    created_at = fields.DateTimeField(default=utc_now)
 
     class Meta:
         tablename = "moods"
