@@ -28,3 +28,4 @@ packaging>=23.0
 
 # Monitoring and error tracking
 sentry-sdk[fastapi]>=1.40.0
+requests>=2.31.0
