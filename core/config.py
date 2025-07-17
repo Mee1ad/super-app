@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # Google OAuth Configuration
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/auth/callback")
+    google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/api/v1/auth/google/callback")
     
     # DeepSeek AI Configuration
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
@@ -80,8 +80,14 @@ class Settings(BaseSettings):
     def get_database_url(self) -> str:
         """Get database URL from separate components"""
         if self.is_testing:
-            # Use SQLite file for testing (better for migrations and CI)
-            return "sqlite:///./test.db"
+            # Check if PostgreSQL test environment variables are set
+            if os.getenv("DB_HOST") and os.getenv("DB_NAME") and os.getenv("DB_USER"):
+                # Use PostgreSQL for testing if explicitly configured
+                password = self.db_password
+                return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
+            else:
+                # Use SQLite file for testing (better for migrations and CI)
+                return "sqlite:///./test.db"
         
         # Use environment variable for password
         password = self.db_password
@@ -90,7 +96,7 @@ class Settings(BaseSettings):
                 print(f"Production mode: using DB_PASSWORD from environment variable")
             else:
                 print(f"Development mode: using DB_PASSWORD from environment")
-            
+        
         return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 # Create settings instance

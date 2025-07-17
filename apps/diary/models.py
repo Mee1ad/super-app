@@ -7,11 +7,9 @@ from db.session import models_registry
 
 class Mood(BaseModel):
     objects: ClassVar[Manager] = Manager()
-    id = fields.UUIDField(primary_key=True)
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
     color = fields.CharField(max_length=20)
-    created_at = fields.DateTimeField(default=utc_now)
 
     class Meta:
         tablename = "moods"

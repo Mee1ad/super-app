@@ -61,7 +61,7 @@ def register_migrations():
                         attr != Migration):
                         migration_instance = attr()
                         migration_manager.register_migration(migration_instance)
-                        logger.info(f"✅ Registered migration: {migration_instance.version}")
+                        logger.info(f"✅ Registered migration: {migration_instance.get_version()}")
                         break
         
         logger.info(f"✅ Registered {len(migration_manager.migrations)} migrations")
