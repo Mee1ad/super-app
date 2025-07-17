@@ -24,8 +24,10 @@ def init_sentry():
         auto_enabling_integrations=True,
         # Send default PII
         send_default_pii=True,
-        # Enable debug mode in development
+        # Enable debug mode in development (but suppress integration logs)
         debug=settings.debug,
+        # Suppress integration setup logs
+        enable_tracing=True,
     )
     
     print(f"Sentry initialized for environment: {settings.sentry_environment}") 

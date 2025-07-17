@@ -26,6 +26,82 @@ def ping() -> dict:
     return {"message": "pong"}
 
 @get(
+    path="/test-sentry-error",
+    tags=["Testing"],
+    summary="Test Sentry Error",
+    description="Intentionally throws an error to test Sentry error capturing."
+)
+def test_sentry_error() -> dict:
+    """
+    Test endpoint that intentionally throws an error to verify Sentry integration.
+    
+    This endpoint is used for testing purposes only to ensure that errors
+    are properly captured and reported to Sentry.
+    
+    Returns:
+        dict: This should never be reached as an error is thrown
+        
+    Raises:
+        ValueError: Always raised for testing purposes
+    """
+    # Intentionally throw an error to test Sentry
+    raise ValueError("This is a test error for Sentry integration testing")
+
+@get(
+    path="/test-sentry-message",
+    tags=["Testing"],
+    summary="Test Sentry Message",
+    description="Sends a test message to Sentry for testing purposes."
+)
+def test_sentry_message() -> dict:
+    """
+    Test endpoint that sends a test message to Sentry.
+    
+    This endpoint is used for testing purposes only to ensure that messages
+    are properly captured and reported to Sentry.
+    
+    Returns:
+        dict: Success message
+    """
+    from core.sentry_utils import capture_message
+    
+    capture_message("This is a test message from the API", "info")
+    return {"message": "Test message sent to Sentry"}
+
+@get(
+    path="/test-sentry-context",
+    tags=["Testing"],
+    summary="Test Sentry Context",
+    description="Sets user context and sends a test message to Sentry."
+)
+def test_sentry_context() -> dict:
+    """
+    Test endpoint that sets user context and sends a test message to Sentry.
+    
+    This endpoint is used for testing purposes only to ensure that user context
+    and additional context are properly captured and reported to Sentry.
+    
+    Returns:
+        dict: Success message
+    """
+    from core.sentry_utils import set_user, set_context, capture_message
+    
+    # Set user context
+    set_user("test-user-123", email="test@example.com", username="testuser")
+    
+    # Set additional context
+    set_context("test_context", {
+        "endpoint": "/test-sentry-context",
+        "purpose": "testing",
+        "timestamp": "2024-01-01T00:00:00Z"
+    })
+    
+    # Send a test message
+    capture_message("Test message with user and context", "info")
+    
+    return {"message": "Test context and message sent to Sentry"}
+
+@get(
     path="/deployment",
     tags=["Deployment"],
     summary="Deployment & Operations Guide",
@@ -143,6 +219,9 @@ cors_config = CORSConfig(
 app = Esmerald(
     routes=[
         Gateway(handler=ping),
+        Gateway(handler=test_sentry_error),
+        Gateway(handler=test_sentry_message),
+        Gateway(handler=test_sentry_context),
         Gateway(handler=deployment_info),
         # V1 API routes - all under /api/v1/
         Include(routes=v1_routes, path="/api/v1"),
