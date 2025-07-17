@@ -102,4 +102,3 @@ class Settings(BaseSettings):
 
 # Create settings instance
 settings = Settings()
-print('sentry_dsn:', settings.sentry_dsn)
