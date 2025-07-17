@@ -3,6 +3,8 @@ Migration 005: Seed initial data
 """
 from db.migrations.base import Migration
 from db.session import database
+from apps.diary.models import Mood
+from apps.food_planner.models import MealType
 
 
 class SeedInitialDataMigration(Migration):
@@ -23,60 +25,37 @@ class SeedInitialDataMigration(Migration):
     async def up(self) -> None:
         """Seed initial data"""
         # Seed moods
-        moods = [
-            ("happy", "Happy and content"),
-            ("sad", "Sad or down"),
-            ("excited", "Excited and energetic"),
-            ("calm", "Calm and peaceful"),
-            ("anxious", "Anxious or worried"),
-            ("angry", "Angry or frustrated"),
-            ("tired", "Tired or exhausted"),
-            ("neutral", "Neutral or indifferent")
+        moods_data = [
+            {"name": "happy", "emoji": "😊", "color": "#4CAF50"},
+            {"name": "sad", "emoji": "😢", "color": "#2196F3"},
+            {"name": "excited", "emoji": "🎉", "color": "#FF9800"},
+            {"name": "calm", "emoji": "😌", "color": "#4CAF50"},
+            {"name": "anxious", "emoji": "😰", "color": "#FF5722"},
+            {"name": "angry", "emoji": "😠", "color": "#F44336"},
+            {"name": "tired", "emoji": "😴", "color": "#9C27B0"},
+            {"name": "neutral", "emoji": "😐", "color": "#607D8B"}
         ]
         
-        for mood_name, mood_description in moods:
-            existing_mood = await database.fetch_one(
-                "SELECT id FROM moods WHERE name = :name",
-                {"name": mood_name}
-            )
-            
+        for mood_data in moods_data:
+            existing_mood = await Mood.query.filter(name=mood_data["name"]).first()
             if not existing_mood:
-                await database.execute("""
-                    INSERT INTO moods (name, emoji, color)
-                    VALUES (:name, :emoji, :color)
-                """, {
-                    "name": mood_name,
-                    "emoji": "😊",  # Default emoji
-                    "color": "#4CAF50"  # Default color
-                })
+                await Mood.query.create(**mood_data)
         
         # Seed meal types
-        meal_types = [
-            ("breakfast", "🌅", "08:00", "Morning meal"),
-            ("lunch", "🍕", "12:00", "Midday meal"),
-            ("dinner", "🍽️", "18:00", "Evening meal"),
-            ("snack", "☕", "15:00", "Light snack"),
-            ("dessert", "🍰", "20:00", "Sweet treat")
+        meal_types_data = [
+            {"name": "breakfast", "emoji": "🌅", "time": "08:00", "description": "Morning meal"},
+            {"name": "lunch", "emoji": "🍕", "time": "12:00", "description": "Midday meal"},
+            {"name": "dinner", "emoji": "🍽️", "time": "18:00", "description": "Evening meal"},
+            {"name": "snack", "emoji": "☕", "time": "15:00", "description": "Light snack"},
+            {"name": "dessert", "emoji": "🍰", "time": "20:00", "description": "Sweet treat"}
         ]
         
-        for meal_name, meal_emoji, meal_time, meal_description in meal_types:
-            existing_meal = await database.fetch_one(
-                "SELECT id FROM meal_types WHERE name = :name",
-                {"name": meal_name}
-            )
-            
+        for meal_data in meal_types_data:
+            existing_meal = await MealType.query.filter(name=meal_data["name"]).first()
             if not existing_meal:
-                await database.execute("""
-                    INSERT INTO meal_types (name, emoji, time, description)
-                    VALUES (:name, :emoji, :time, :description)
-                """, {
-                    "name": meal_name,
-                    "emoji": meal_emoji,
-                    "time": meal_time,
-                    "description": meal_description
-                })
+                await MealType.query.create(**meal_data)
     
     async def down(self) -> None:
         """Remove seeded data"""
-        await database.execute("DELETE FROM meal_types")
-        await database.execute("DELETE FROM moods") 
+        await MealType.query.delete()
+        await Mood.query.delete() 
