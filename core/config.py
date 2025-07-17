@@ -87,7 +87,7 @@ class Settings(BaseSettings):
                 print(f"Production mode: using DB_PASSWORD from environment variable")
             else:
                 print(f"Development mode: using DB_PASSWORD from environment")
-            
+        
         return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 # Create settings instance
