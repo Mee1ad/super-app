@@ -102,7 +102,7 @@ class MigrationManager:
         """Register a migration"""
         self.migrations.append(migration)
         # Sort by version
-        self.migrations.sort(key=lambda m: m.version)
+        self.migrations.sort(key=lambda m: m.get_version())
     
     def _get_database_dialect(self) -> str:
         """Get database dialect for SQL compatibility"""
@@ -298,9 +298,9 @@ class MigrationManager:
         """Check if migration dependencies are satisfied"""
         applied_migrations = await self.get_applied_migrations()
         
-        for dependency in migration.dependencies:
+        for dependency in migration.get_dependencies():
             if dependency not in applied_migrations:
-                logger.error(f"❌ Migration {migration.version} depends on {dependency} which is not applied")
+                logger.error(f"❌ Migration {migration.get_version()} depends on {dependency} which is not applied")
                 return False
         
         return True
@@ -308,92 +308,76 @@ class MigrationManager:
     async def migrate(self, target_version: Optional[str] = None) -> None:
         """Run migrations up to target version"""
         await self.ensure_migration_table()
-        
-        # Fix any schema issues before running migrations
         await self.fix_table_schemas()
         
         applied_migrations = await self.get_applied_migrations()
-        pending_migrations = []
         
         for migration in self.migrations:
-            if migration.version not in applied_migrations:
-                if target_version and migration.version > target_version:
+            if migration.get_version() not in applied_migrations:
+                if target_version and migration.get_version() > target_version:
                     break
-                pending_migrations.append(migration)
-        
-        if not pending_migrations:
-            logger.info("✅ No pending migrations")
-            return
-        
-        logger.info(f"🔄 Running {len(pending_migrations)} pending migrations...")
-        
-        for migration in pending_migrations:
-            logger.info(f"🔄 Running migration {migration.version}: {migration.name}")
-            
-            # Check dependencies
-            if not await self.check_dependencies(migration):
-                raise Exception(f"Migration {migration.version} dependencies not satisfied")
-            
-            try:
-                await migration.up()
-                await migration.mark_applied()
-                logger.info(f"✅ Migration {migration.version} completed successfully")
-            except Exception as e:
-                logger.error(f"❌ Migration {migration.version} failed: {e}")
-                raise
+                
+                logger.info(f"🔄 Running migration {migration.get_version()}: {migration.get_name()}")
+                
+                if not await self.check_dependencies(migration):
+                    raise Exception(f"Migration {migration.get_version()} dependencies not satisfied")
+                
+                try:
+                    await migration.up()
+                    await migration.mark_applied()
+                    logger.info(f"✅ Migration {migration.get_version()} completed successfully")
+                except Exception as e:
+                    logger.error(f"❌ Migration {migration.get_version()} failed: {e}")
+                    raise
     
     async def rollback(self, target_version: str) -> None:
         """Rollback migrations to target version"""
         await self.ensure_migration_table()
         
         applied_migrations = await self.get_applied_migrations()
-        migrations_to_rollback = []
         
-        # Find migrations to rollback (in reverse order)
+        # Rollback in reverse order
         for migration in reversed(self.migrations):
-            if migration.version in applied_migrations and migration.version > target_version:
-                migrations_to_rollback.append(migration)
-        
-        if not migrations_to_rollback:
-            logger.info("✅ No migrations to rollback")
-            return
-        
-        logger.info(f"🔄 Rolling back {len(migrations_to_rollback)} migrations...")
-        
-        for migration in migrations_to_rollback:
-            logger.info(f"🔄 Rolling back migration {migration.version}: {migration.name}")
-            
-            try:
-                await migration.down()
-                await migration.mark_rolled_back()
-                logger.info(f"✅ Migration {migration.version} rolled back successfully")
-            except Exception as e:
-                logger.error(f"❌ Rollback of migration {migration.version} failed: {e}")
-                raise
+            if migration.get_version() in applied_migrations and migration.get_version() > target_version:
+                logger.info(f"🔄 Rolling back migration {migration.get_version()}: {migration.get_name()}")
+                
+                try:
+                    await migration.down()
+                    await migration.mark_rolled_back()
+                    logger.info(f"✅ Migration {migration.get_version()} rolled back successfully")
+                except Exception as e:
+                    logger.error(f"❌ Rollback of migration {migration.get_version()} failed: {e}")
+                    raise
     
     async def status(self) -> Dict[str, Any]:
         """Get migration status"""
         await self.ensure_migration_table()
         
         applied_migrations = await self.get_applied_migrations()
-        pending_migrations = []
+        
+        status = {
+            "total_migrations": len(self.migrations),
+            "applied_migrations": len(applied_migrations),
+            "pending_migrations": [],
+            "applied_migrations_list": []
+        }
         
         for migration in self.migrations:
-            if migration.version not in applied_migrations:
-                pending_migrations.append({
-                    "version": migration.version,
-                    "name": migration.name,
-                    "description": migration.description,
-                    "dependencies": migration.dependencies
+            if migration.get_version() not in applied_migrations:
+                status["pending_migrations"].append({
+                    "version": migration.get_version(),
+                    "name": migration.get_name(),
+                    "description": migration.get_description(),
+                    "dependencies": migration.get_dependencies()
+                })
+            else:
+                status["applied_migrations_list"].append({
+                    "version": migration.get_version(),
+                    "name": migration.get_name(),
+                    "description": migration.get_description()
                 })
         
-        return {
-            "applied": applied_migrations,
-            "pending": pending_migrations,
-            "total": len(self.migrations),
-            "applied_count": len(applied_migrations),
-            "pending_count": len(pending_migrations)
-        }
+        return status
 
 
 # Global migration manager instance
