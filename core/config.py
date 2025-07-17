@@ -71,8 +71,14 @@ class Settings(BaseSettings):
     def get_database_url(self) -> str:
         """Get database URL from separate components"""
         if self.is_testing:
-            # Use SQLite file for testing (better for migrations and CI)
-            return "sqlite:///./test.db"
+            # Check if PostgreSQL test environment variables are set
+            if os.getenv("DB_HOST") and os.getenv("DB_NAME") and os.getenv("DB_USER"):
+                # Use PostgreSQL for testing if explicitly configured
+                password = self.db_password
+                return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
+            else:
+                # Use SQLite file for testing (better for migrations and CI)
+                return "sqlite:///./test.db"
         
         # Use environment variable for password
         password = self.db_password

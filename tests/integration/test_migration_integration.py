@@ -18,8 +18,8 @@ from core.config import settings
 
 
 @pytest_asyncio.fixture
-async def setup_test_environment():
-    """Setup test environment for migration tests"""
+async def setup_test_environment(postgresql_test_config):
+    """Setup PostgreSQL test environment for migration tests"""
     # Connect to database
     await database.connect()
     
