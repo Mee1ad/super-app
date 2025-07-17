@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # Google OAuth Configuration
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/auth/callback")
+    google_redirect_uri: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/api/v1/auth/google/callback")
     
     # DeepSeek AI Configuration
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
@@ -77,8 +77,8 @@ class Settings(BaseSettings):
                 password = self.db_password
                 return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
             else:
-                # Use SQLite file for testing (better for migrations and CI)
-                return "sqlite:///./test.db"
+            # Use SQLite file for testing (better for migrations and CI)
+            return "sqlite:///./test.db"
         
         # Use environment variable for password
         password = self.db_password
