@@ -25,3 +25,6 @@ passlib[bcrypt]>=1.7.4
 
 # Changelog dependencies
 packaging>=23.0
+
+# Monitoring and error tracking
+sentry-sdk[fastapi]>=1.40.0

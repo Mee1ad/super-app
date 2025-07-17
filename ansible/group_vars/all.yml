@@ -3,3 +3,6 @@ backend_dir: /opt/backend-app
 certbot_email: soheilravasani@gmail.com
 client_url: https://super-app-front.vercel.app
 google_redirect_uri: https://api.todomodo.ir/api/v1/auth/google/callback
+sentry_environment: production
+sentry_traces_sample_rate: 1.0
+sentry_profiles_sample_rate: 1.0 

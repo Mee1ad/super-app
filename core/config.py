@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 import os
 import sys
+from typing import Optional
 
 class Settings(BaseSettings):
     # Environment
@@ -37,6 +38,14 @@ class Settings(BaseSettings):
 
     ip_salt: str = os.getenv("IP_SALT", "your_secure_random_ip_salt_here")
     user_agent_salt: str = os.getenv("USER_AGENT_SALT", "your_secure_random_ua_salt_here")
+
+    # Sentry settings
+    sentry_dsn: Optional[str] = os.getenv("SENTRY_DSN")
+    sentry_environment: str = os.getenv("SENTRY_ENVIRONMENT", "development")
+    sentry_traces_sample_rate: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0"))
+    sentry_profiles_sample_rate: float = float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "1.0"))
+    
+
 
     model_config = {
         "env_file": ".env",
