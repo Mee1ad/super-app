@@ -13,18 +13,25 @@ class TestSentryInitialization:
     @patch('core.sentry.sentry_sdk.init')
     def test_sentry_init_with_dsn(self, mock_init):
         """Test Sentry initialization with DSN"""
-        with patch('core.config.settings.sentry_dsn', 'test-dsn'):
+        with patch('core.config.settings.sentry_dsn', 'https://test-dsn@sentry.io/test-project'):
             with patch('core.config.settings.sentry_environment', 'test'):
                 init_sentry()
                 mock_init.assert_called_once()
                 call_args = mock_init.call_args
-                assert call_args[1]['dsn'] == 'test-dsn'
+                assert call_args[1]['dsn'] == 'https://test-dsn@sentry.io/test-project'
                 assert call_args[1]['environment'] == 'test'
     
     @patch('core.sentry.sentry_sdk.init')
     def test_sentry_init_without_dsn(self, mock_init):
         """Test Sentry initialization without DSN"""
         with patch('core.config.settings.sentry_dsn', None):
+            init_sentry()
+            mock_init.assert_not_called()
+    
+    @patch('core.sentry.sentry_sdk.init')
+    def test_sentry_init_with_invalid_dsn(self, mock_init):
+        """Test Sentry initialization with invalid DSN format"""
+        with patch('core.config.settings.sentry_dsn', 'invalid-dsn-format'):
             init_sentry()
             mock_init.assert_not_called()
 
