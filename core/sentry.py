@@ -80,6 +80,10 @@ def before_send_filter(event, hint):
     if settings.sentry_environment == "development" and not settings.sentry_debug:
         return None
     
+    # Block all events from localhost/development
+    if settings.sentry_environment == "development":
+        return None
+    
     # Filter out certain error types if needed
     if hint and 'exc_info' in hint:
         exc_type, exc_value, exc_traceback = hint['exc_info']
@@ -93,6 +97,10 @@ def before_breadcrumb_filter(breadcrumb, hint):
     """Filter breadcrumbs before sending to Sentry"""
     # Don't send breadcrumbs in development unless explicitly configured
     if settings.sentry_environment == "development" and not settings.sentry_debug:
+        return None
+    
+    # Block all breadcrumbs from development
+    if settings.sentry_environment == "development":
         return None
     
     return breadcrumb
