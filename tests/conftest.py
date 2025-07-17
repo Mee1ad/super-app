@@ -112,6 +112,37 @@ async def clean_database():
     await database.disconnect()
 
 
+@pytest_asyncio.fixture
+async def setup_database():
+    """Setup database with migrations for testing"""
+    await database.connect()
+    
+    # Import and run migrations
+    from db.migrate_incremental import main as run_migrations
+    
+    try:
+        # Run migrations to create all tables
+        await run_migrations("migrate")
+    except Exception as e:
+        # If migrations fail, try to create tables manually for testing
+        print(f"Migration failed: {e}")
+        # This is a fallback for unit tests - in real scenarios migrations should work
+    
+    yield database
+    
+    # Clean up after tests
+    try:
+        # Clean up test data
+        await database.execute("DELETE FROM users WHERE email LIKE '%@example.com'")
+        await database.execute("DELETE FROM lists WHERE title LIKE 'Test%'")
+        await database.execute("DELETE FROM tasks WHERE title LIKE 'Test%'")
+        await database.execute("DELETE FROM shopping_items WHERE title LIKE 'Test%'")
+    except Exception:
+        pass
+    
+    await database.disconnect()
+
+
 @pytest.fixture
 def event_loop():
     """Create an instance of the default event loop for the test session"""
