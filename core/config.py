@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     sentry_environment: str = os.getenv("SENTRY_ENVIRONMENT", "development")
     sentry_traces_sample_rate: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0"))
     sentry_profiles_sample_rate: float = float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "1.0"))
+    sentry_debug: bool = os.getenv("SENTRY_DEBUG", "false").lower() in ("1", "true", "yes", "on")
     
 
 

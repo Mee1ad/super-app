@@ -13,7 +13,7 @@ def init_sentry():
     # Debug information
     logger.info(f"Sentry initialization - DSN configured: {bool(settings.sentry_dsn)}")
     logger.info(f"Sentry environment: {settings.sentry_environment}")
-    logger.info(f"Debug mode: {settings.debug}")
+    logger.info(f"Debug mode: {settings.sentry_debug}")
     
     if not settings.sentry_dsn:
         logger.warning("Sentry DSN not configured, skipping Sentry initialization")
@@ -52,7 +52,7 @@ def init_sentry():
             # Send default PII
             send_default_pii=True,
             # Enable debug mode in development
-            debug=settings.debug,
+            debug=settings.sentry_debug,
             # Enable tracing
             enable_tracing=True,
             # Additional production settings
@@ -77,7 +77,7 @@ def init_sentry():
 def before_send_filter(event, hint):
     """Filter events before sending to Sentry"""
     # Don't send events in development unless explicitly configured
-    if settings.sentry_environment == "development" and not settings.debug:
+    if settings.sentry_environment == "development" and not settings.sentry_debug:
         return None
     
     # Filter out certain error types if needed
@@ -92,7 +92,7 @@ def before_send_filter(event, hint):
 def before_breadcrumb_filter(breadcrumb, hint):
     """Filter breadcrumbs before sending to Sentry"""
     # Don't send breadcrumbs in development unless explicitly configured
-    if settings.sentry_environment == "development" and not settings.debug:
+    if settings.sentry_environment == "development" and not settings.sentry_debug:
         return None
     
     return breadcrumb
