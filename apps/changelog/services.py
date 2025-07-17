@@ -111,10 +111,12 @@ class DeepSeekService:
     
     def __init__(self):
         self.api_key = settings.deepseek_api_key
-        if not self.api_key:
-            raise ValueError("DEEPSEEK_API_KEY not found in environment variables")
+        self.enabled = bool(self.api_key)
         
-
+        if not self.enabled:
+            self.logger = logging.getLogger("DeepSeekService")
+            self.logger.warning("DEEPSEEK_API_KEY not found in environment variables. DeepSeek service will be disabled.")
+            return
         
         self.base_url = "https://api.deepseek.com/v1"
         self.timeout = getattr(settings, "deepseek_timeout", 30.0)
@@ -124,6 +126,20 @@ class DeepSeekService:
         """Use DeepSeek to humanize git commits into changelog entries. Fallback to raw commits if DeepSeek fails."""
         if not commits:
             return []
+        
+        if not self.enabled:
+            # Fallback: return raw commit messages as changelog entries
+            self.logger.warning("DeepSeek service is disabled, falling back to raw commit messages.")
+            fallback_entries = []
+            for commit in commits:
+                fallback_entries.append({
+                    "version": "AI unavailable",
+                    "title": commit["subject"],
+                    "description": commit["body"] or commit["subject"],
+                    "change_type": "changed",
+                    "is_breaking": False
+                })
+            return fallback_entries
         
         # Prepare commits for AI processing
         commits_text = "\n\n".join([
@@ -228,6 +244,23 @@ Only return valid JSON, no other text.
         """Summarize multiple commits into a single changelog entry"""
         if not commits:
             return []
+        
+        if not self.enabled:
+            # Fallback: return raw commit messages as changelog entries
+            self.logger.warning("DeepSeek service is disabled, falling back to raw commit messages.")
+            fallback_entries = []
+            for commit in commits:
+                fallback_entries.append({
+                    "version": "AI unavailable",
+                    "title": commit["subject"],
+                    "description": commit["body"] or commit["subject"],
+                    "change_type": "changed",
+                    "is_breaking": False,
+                    "commit_hash": commit["hash"],
+                    "commit_date": commit["date"].isoformat(),
+                    "commit_message": commit["subject"]
+                })
+            return fallback_entries
         
         # Prepare commits for AI processing
         commits_text = "\n\n".join([

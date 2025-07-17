@@ -13,6 +13,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db.session import database
 from core.config import settings
+from esmerald.testclient import EsmeraldTestClient
+from main import app
 
 
 @pytest_asyncio.fixture
@@ -119,6 +121,12 @@ def event_loop():
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture
+def test_client():
+    """Test client fixture for making HTTP requests"""
+    return EsmeraldTestClient(app)
 
 
 # Mark all async tests

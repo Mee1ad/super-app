@@ -77,8 +77,8 @@ class Settings(BaseSettings):
                 password = self.db_password
                 return f"postgresql://{self.db_user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
             else:
-            # Use SQLite file for testing (better for migrations and CI)
-            return "sqlite:///./test.db"
+                # Use SQLite file for testing (better for migrations and CI)
+                return "sqlite:///./test.db"
         
         # Use environment variable for password
         password = self.db_password
