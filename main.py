@@ -2,6 +2,8 @@ from esmerald import Esmerald, Gateway, get, CORSConfig, Include
 from core.config import settings
 from core.sentry import init_sentry
 from core.exceptions import sentry_exception_handler
+from core.sentry_middleware import SentryMiddleware
+from core.sentry_decorator import capture_sentry_errors
 from db.session import database
 from api.v1.api_v1 import v1_routes
 import logging

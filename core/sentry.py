@@ -1,127 +1,126 @@
+import os
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from sentry_sdk.integrations.argv import ArgvIntegration
+from sentry_sdk.integrations.atexit import AtexitIntegration
+from sentry_sdk.integrations.dedupe import DedupeIntegration
+from sentry_sdk.integrations.excepthook import ExcepthookIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.modules import ModulesIntegration
+from sentry_sdk.integrations.stdlib import StdlibIntegration
+from sentry_sdk.integrations.threading import ThreadingIntegration
+from sentry_sdk.integrations.asyncpg import AsyncPGIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
+from sentry_sdk.integrations.loguru import LoguruIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from core.config import settings
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
-def init_sentry():
-    """Initialize Sentry SDK for error tracking and performance monitoring"""
-    
-    # Debug information
-    logger.info(f"Sentry initialization - DSN configured: {bool(settings.sentry_dsn)}")
-    logger.info(f"Sentry environment: {settings.sentry_environment}")
-    logger.info(f"Debug mode: {settings.sentry_debug}")
-    
-    if not settings.sentry_dsn:
-        logger.warning("Sentry DSN not configured, skipping Sentry initialization")
-        print("Sentry DSN not configured, skipping Sentry initialization")
-        return
-    
-    # Validate DSN format
-    if not settings.sentry_dsn.startswith('http'):
-        logger.error(f"Invalid Sentry DSN format: {settings.sentry_dsn[:20]}...")
-        print(f"Invalid Sentry DSN format: {settings.sentry_dsn[:20]}...")
-        return
-    
-    try:
-        # Configure sampling rates based on environment
-        traces_sample_rate = settings.sentry_traces_sample_rate
-        profiles_sample_rate = settings.sentry_profiles_sample_rate
-        
-        # Reduce sampling in production to avoid overwhelming Sentry
-        if settings.sentry_environment == "production":
-            traces_sample_rate = min(traces_sample_rate, 0.1)  # Max 10% in production
-            profiles_sample_rate = min(profiles_sample_rate, 0.1)  # Max 10% in production
-            logger.info(f"Production environment detected - reduced sampling rates: traces={traces_sample_rate}, profiles={profiles_sample_rate}")
-        
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn,
-            environment=settings.sentry_environment,
-            traces_sample_rate=traces_sample_rate,
-            profiles_sample_rate=profiles_sample_rate,
-            integrations=[
-                FastApiIntegration(),
-                AsyncioIntegration(),
-                SqlalchemyIntegration(),
-            ],
-            # Enable auto-instrumentation
-            auto_enabling_integrations=True,
-            # Send default PII
-            send_default_pii=True,
-            # Enable debug mode in development
-            debug=settings.sentry_debug,
-            # Additional production settings
-            before_send=before_send_filter,
-            before_breadcrumb=before_breadcrumb_filter,
-            # Release tracking (optional)
-            release=os.getenv("SENTRY_RELEASE"),
-            # Server name for better identification
-            server_name=os.getenv("SENTRY_SERVER_NAME", "unknown"),
-        )
-        
-        logger.info(f"Sentry initialized successfully for environment: {settings.sentry_environment}")
-        print(f"Sentry initialized for environment: {settings.sentry_environment}")
-        
-        # Test Sentry connection
-        test_sentry_connection()
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize Sentry: {e}")
-        print(f"Failed to initialize Sentry: {e}")
-
 def before_send_filter(event, hint):
     """Filter events before sending to Sentry"""
-    if settings.debug:
-        print(f"🔍 Sentry before_send_filter called")
-        print(f"   Environment: {settings.sentry_environment}")
-        print(f"   Debug mode: {settings.sentry_debug}")
-        print(f"   Event type: {event.get('type', 'unknown')}")
-        if hint and 'exc_info' in hint:
-            exc_type, exc_value, exc_traceback = hint['exc_info']
-            print(f"   Exception: {exc_type.__name__}: {exc_value}")
     
-    # Only block events in development if debug is disabled
-    if settings.sentry_environment == "development" and not settings.sentry_debug:
-        if settings.debug:
-            print("   ❌ Sentry event blocked in development mode (debug disabled)")
-        logger.debug("Sentry event blocked in development mode (debug disabled)")
+    # Get environment and debug settings from settings object
+    environment = settings.sentry_environment
+    debug_mode = settings.sentry_debug
+    
+    print("🔍 Sentry before_send_filter called")
+    print(f"   Environment: {environment}")
+    print(f"   Debug mode: {debug_mode}")
+    print(f"   Event type: {event.get('type', 'unknown')}")
+    
+    # In development, allow all events to be sent
+    if environment == "development":
+        print("   ✅ Sentry event allowed to be sent")
+        logger.debug("Sentry event allowed to be sent")
+        return event
+    
+    # In production, filter out certain events
+    if event.get("type") == "transaction":
+        print("   ❌ Transaction event filtered out")
         return None
     
-    # Filter out certain error types if needed
-    if hint and 'exc_info' in hint:
-        exc_type, exc_value, exc_traceback = hint['exc_info']
-        # Example: Filter out specific exceptions
-        if isinstance(exc_value, KeyboardInterrupt):
-            if settings.debug:
-                print("   ❌ Sentry event blocked - KeyboardInterrupt")
-            logger.debug("Sentry event blocked - KeyboardInterrupt")
-            return None
-    
-    if settings.debug:
-        print("   ✅ Sentry event allowed to be sent")
+    print("   ✅ Sentry event allowed to be sent")
     logger.debug("Sentry event allowed to be sent")
     return event
 
 def before_breadcrumb_filter(breadcrumb, hint):
     """Filter breadcrumbs before sending to Sentry"""
-    # Only block breadcrumbs in development if debug is disabled
-    if settings.sentry_environment == "development" and not settings.sentry_debug:
-        return None
+    
+    # Filter out certain breadcrumbs in production
+    environment = settings.sentry_environment
+    
+    if environment == "production":
+        # Filter out database queries in production
+        if breadcrumb.get("category") == "db":
+            return None
     
     return breadcrumb
 
-def test_sentry_connection():
-    """Test Sentry connection by sending a test message"""
+def init_sentry():
+    """Initialize Sentry SDK with comprehensive configuration"""
+    
+    # Get Sentry configuration from settings
+    dsn = settings.sentry_dsn
+    environment = settings.sentry_environment
+    debug = settings.sentry_debug
+    traces_sample_rate = settings.sentry_traces_sample_rate
+    profiles_sample_rate = settings.sentry_profiles_sample_rate
+    
+    if not dsn:
+        print("⚠️  SENTRY_DSN not found, skipping Sentry initialization")
+        return
+    
+    print(f"🔧 Initializing Sentry for environment: {environment}")
+    
+    # Configure Sentry with comprehensive integrations
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=environment,
+        debug=debug,
+        traces_sample_rate=traces_sample_rate,
+        profiles_sample_rate=profiles_sample_rate,
+        before_send=before_send_filter,
+        before_breadcrumb=before_breadcrumb_filter,
+        integrations=[
+            FastApiIntegration(),
+            AsyncioIntegration(),
+            SqlalchemyIntegration(),
+            ArgvIntegration(),
+            AtexitIntegration(),
+            DedupeIntegration(),
+            ExcepthookIntegration(),
+            LoggingIntegration(
+                level=logging.INFO,
+                event_level=logging.ERROR
+            ),
+            ModulesIntegration(),
+            StdlibIntegration(),
+            ThreadingIntegration(),
+            AsyncPGIntegration(),
+            HttpxIntegration(),
+            LoguruIntegration(),
+            StarletteIntegration(),
+        ],
+        # Enable automatic error capture
+        auto_enabling_integrations=True,
+        # Capture all exceptions automatically
+        attach_stacktrace=True,
+        # Send default PII
+        send_default_pii=True,
+        # Enable performance monitoring
+        enable_tracing=True,
+    )
+    
+    logger.info(f"Sentry initialized successfully for environment: {environment}")
+    print(f"Sentry initialized for environment: {environment}")
+    
+    # Test Sentry connection
     try:
-        import sentry_sdk
-        sentry_sdk.capture_message(
-            f"Sentry connection test - Environment: {settings.sentry_environment}",
-            level="info"
-        )
+        sentry_sdk.capture_message("Sentry connection test message", level="info")
         logger.info("Sentry connection test message sent successfully")
         print("✅ Sentry connection test message sent successfully")
     except Exception as e:

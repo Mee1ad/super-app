@@ -68,6 +68,7 @@ class SentryExceptionHandler:
             "endpoint": str(request.url.path),
             "method": request.method,
             "request_id": getattr(request, "request_id", None),
+            "handler": "SentryExceptionHandler"
         })
         
         # Return appropriate error response
@@ -98,6 +99,33 @@ class SentryExceptionHandler:
 
 # Global exception handler instance
 sentry_exception_handler = SentryExceptionHandler()
+
+# Also create a simple function to capture errors directly
+def capture_web_error(exc: Exception, method: str = "UNKNOWN", path: str = "/"):
+    """Capture web errors directly for cases where exception handler isn't called"""
+    
+    print(f"🚨 CAPTURING WEB ERROR: {method} {path}")
+    print(f"   Exception: {type(exc).__name__}: {exc}")
+    
+    if settings.debug:
+        print("\n📋 FULL TRACEBACK:")
+        traceback.print_exc()
+        print()
+    
+    # Set context for Sentry
+    set_context("request", {
+        "method": method,
+        "url": path,
+    })
+    
+    # Capture the exception in Sentry
+    capture_error(exc, {
+        "endpoint": path,
+        "method": method,
+        "capture_method": "direct"
+    })
+    
+    logger.error(f"Web error captured directly: {exc}", exc_info=True)
 
 # Custom HTTP exceptions
 class ValidationError(HTTPException):
