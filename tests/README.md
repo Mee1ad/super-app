@@ -1,324 +1,208 @@
-# Testing Strategy
+# Backend Test Organization
 
-This project implements a **hybrid testing strategy** that combines fast SQLite unit tests with comprehensive PostgreSQL integration tests.
+This directory contains all backend tests organized by type and functionality.
 
-## Testing Architecture
+## Directory Structure
 
-### 1. SQLite Unit Tests (Fast Feedback)
-- **Location**: `tests/unit/`
-- **Database**: SQLite (in-memory/file-based)
-- **Purpose**: Fast unit tests for business logic, models, and basic migrations
-- **Benefits**: 
-  - Rapid feedback during development
-  - No external dependencies
-  - Fast execution in CI/CD
-  - Isolated test environment
-
-### 2. PostgreSQL Integration Tests (Production Parity)
-- **Location**: `tests/integration/`
-- **Database**: PostgreSQL (service container in CI)
-- **Purpose**: Integration tests for PostgreSQL-specific features and real-world scenarios
-- **Benefits**:
-  - Tests actual production database system
-  - Validates PostgreSQL-specific features
-  - Catches database-specific issues
-  - Ensures migration compatibility
+```
+tests/
+├── unit/                    # Unit tests for individual components
+│   ├── sentry/             # Sentry unit tests
+│   ├── middleware/         # Middleware unit tests
+│   ├── endpoints/          # Endpoint unit tests
+│   ├── test_exceptions.py  # Exception handling tests
+│   ├── test_schemas.py     # Schema validation tests
+│   ├── test_models.py      # Database model tests
+│   └── test_error_schemas.py # Error schema tests
+├── integration/            # Integration tests
+│   ├── sentry/            # Sentry integration tests
+│   │   ├── test_sentry_integration.py
+│   │   ├── test_sentry_message.py
+│   │   ├── test_sentry_direct.py
+│   │   ├── test_sentry_working.py
+│   │   └── test_sentry_production.py
+│   ├── middleware/        # Middleware integration tests
+│   │   ├── test_middleware_working.py
+│   │   ├── test_middleware_logging.py
+│   │   └── test_middleware_config.py
+│   ├── endpoints/         # Endpoint integration tests
+│   │   ├── test_error_capture.py
+│   │   ├── test_error_capture_fix.py
+│   │   ├── test_unhandled_issues.py
+│   │   ├── test_normal_endpoint.py
+│   │   └── test_comprehensive_error_capture.py
+│   ├── test_todo_endpoints.py
+│   ├── test_migration_integration.py
+│   └── test_postgresql_migrations.py
+├── e2e/                   # End-to-end tests
+├── performance/           # Performance tests
+├── debug/                 # Debug and utility tests
+│   ├── test_live_endpoint.py
+│   ├── test_server_start.py
+│   ├── test_decorator.py
+│   ├── test_direct_exception.py
+│   ├── test_simple_error.py
+│   ├── test_exception_handler.py
+│   ├── test_ping_error.py
+│   └── test_sentry_current.py
+├── conftest.py           # Pytest configuration
+└── test_cors.py          # CORS tests
+```
 
 ## Test Categories
 
-### Unit Tests (SQLite)
-- `tests/unit/test_migrations.py` - Migration system unit tests
-- `tests/unit/test_models.py` - Database model tests
-- `tests/unit/test_schemas.py` - Pydantic schema tests
-- `tests/unit/test_error_schemas.py` - Error handling tests
+### Unit Tests (`tests/unit/`)
+- **Purpose**: Test individual components in isolation
+- **Scope**: Single functions, classes, or modules
+- **Dependencies**: Mocked external dependencies
+- **Speed**: Fast execution
 
-### Integration Tests (PostgreSQL)
-- `tests/integration/test_migration_integration.py` - Migration integration tests
-- `tests/integration/test_postgresql_migrations.py` - PostgreSQL-specific migration tests
-- `tests/integration/test_todo_endpoints.py` - API endpoint integration tests
+#### Sentry Unit Tests (`tests/unit/sentry/`)
+- Test Sentry utility functions
+- Test Sentry configuration
+- Test error capture functions
+- Test context setting functions
 
-### Specialized Tests
-- `tests/test_cors.py` - CORS configuration tests
+#### Middleware Unit Tests (`tests/unit/middleware/`)
+- Test middleware functionality
+- Test error handling in middleware
+- Test request/response processing
+
+#### Endpoint Unit Tests (`tests/unit/endpoints/`)
+- Test individual endpoint functions
+- Test request validation
+- Test response formatting
+
+### Integration Tests (`tests/integration/`)
+- **Purpose**: Test component interactions
+- **Scope**: Multiple components working together
+- **Dependencies**: Real or test databases, external services
+- **Speed**: Medium execution time
+
+#### Sentry Integration Tests (`tests/integration/sentry/`)
+- Test Sentry with real HTTP requests
+- Test error capture in live scenarios
+- Test Sentry configuration in different environments
+- Test before_send_filter functionality
+
+#### Middleware Integration Tests (`tests/integration/middleware/`)
+- Test middleware with real requests
+- Test error flow through middleware
+- Test logging and debugging output
+- Test middleware configuration
+
+#### Endpoint Integration Tests (`tests/integration/endpoints/`)
+- Test endpoints with real HTTP requests
+- Test error handling in endpoints
+- Test normal vs error scenarios
+- Test comprehensive error capture
+
+### End-to-End Tests (`tests/e2e/`)
+- **Purpose**: Test complete user workflows
+- **Scope**: Full application stack
+- **Dependencies**: Complete test environment
+- **Speed**: Slow execution
+
+### Performance Tests (`tests/performance/`)
+- **Purpose**: Test application performance
+- **Scope**: Load testing, stress testing
+- **Dependencies**: Performance monitoring tools
+- **Speed**: Variable execution time
+
+### Debug Tests (`tests/debug/`)
+- **Purpose**: Debugging and troubleshooting
+- **Scope**: Specific issues or scenarios
+- **Dependencies**: Debug configurations
+- **Speed**: Variable execution time
 
 ## Running Tests
 
-### Local Development
-
-#### SQLite Tests (Fast)
+### Run All Tests
 ```bash
-# Run all unit tests with SQLite
-pytest tests/unit/ -v
+pytest tests/
+```
 
+### Run Specific Test Categories
+```bash
+# Unit tests only
+pytest tests/unit/
+
+# Integration tests only
+pytest tests/integration/
+
+# Sentry tests only
+pytest tests/unit/sentry/ tests/integration/sentry/
+
+# Middleware tests only
+pytest tests/unit/middleware/ tests/integration/middleware/
+
+# Endpoint tests only
+pytest tests/unit/endpoints/ tests/integration/endpoints/
+```
+
+### Run Specific Test Files
+```bash
 # Run specific test file
-pytest tests/unit/test_migrations.py -v
+pytest tests/integration/sentry/test_sentry_integration.py
+
+# Run with verbose output
+pytest tests/integration/sentry/test_sentry_integration.py -v
 
 # Run with coverage
-pytest tests/unit/ --cov=apps --cov=db --cov=core --cov-report=term-missing
+pytest tests/integration/sentry/test_sentry_integration.py --cov=core.sentry
 ```
 
-#### PostgreSQL Tests (Comprehensive)
+### Debug Tests
 ```bash
-# Option 1: Use the setup script (Recommended)
-./scripts/setup-test-db.sh
+# Run debug tests
+pytest tests/debug/
 
-# Option 2: Manual setup
-# Ensure PostgreSQL is running locally
-# Set environment variables for PostgreSQL testing
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=test_db
-export DB_USER=postgres
-export DB_PASSWORD=postgres
-export ENVIRONMENT=test
+# Run with print statements
+pytest tests/debug/ -s
 
-# Run PostgreSQL integration tests
-pytest tests/integration/ -v
-
-# Run PostgreSQL-specific migration tests
-pytest tests/integration/test_postgresql_migrations.py -v
+# Run specific debug test
+pytest tests/debug/test_sentry_current.py -s
 ```
 
-#### All Tests
-```bash
-# Run all tests (both SQLite and PostgreSQL)
-pytest tests/ -v
-```
+## Test Naming Conventions
 
-### CI/CD Pipeline
+### File Naming
+- `test_*.py` - Test files
+- `conftest.py` - Pytest configuration
+- `README.md` - Documentation
 
-The GitHub Actions workflow automatically runs:
+### Test Function Naming
+- `test_*` - Test functions
+- `test_*_success` - Success scenario tests
+- `test_*_error` - Error scenario tests
+- `test_*_integration` - Integration tests
+- `test_*_unit` - Unit tests
 
-1. **SQLite Tests** (`test-sqlite` job):
-   - Unit tests with SQLite
-   - CORS tests
-   - Migration unit tests
+### Class Naming
+- `Test*` - Test classes
+- `Test*Integration` - Integration test classes
+- `Test*Unit` - Unit test classes
 
-2. **PostgreSQL Tests** (`test-postgresql` job):
-   - Integration tests with PostgreSQL service container
-   - Migration integration tests
-   - PostgreSQL-specific feature tests
+## Test Organization Principles
 
-3. **Deployment** (`deploy` job):
-   - Only runs after both test jobs pass
-   - Deploys to production server
-
-## Test Configuration
-
-### Environment Variables
-
-#### SQLite Testing (Default)
-- No specific environment variables needed
-- Uses `sqlite:///./test.db` automatically
-
-#### PostgreSQL Testing
-```bash
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=test_db
-DB_USER=postgres
-DB_PASSWORD=postgres
-ENVIRONMENT=test
-```
-
-### Test Fixtures
-
-#### SQLite Configuration
-```python
-@pytest.fixture
-def sqlite_test_config():
-    """Configure for SQLite testing"""
-    # Clears PostgreSQL environment variables
-    # Uses default SQLite configuration
-```
-
-#### PostgreSQL Configuration
-```python
-@pytest.fixture
-def postgresql_test_config():
-    """Configure for PostgreSQL testing"""
-    # Sets PostgreSQL environment variables
-    # Uses PostgreSQL service container
-```
-
-## PostgreSQL-Specific Features Tested
-
-### 1. Data Types
-- UUID with `gen_random_uuid()`
-- JSON/JSONB columns
-- ARRAY types
-- TIMESTAMP WITH TIME ZONE
-
-### 2. Advanced Features
-- Full-text search with `tsvector`
-- Generated columns
-- Advanced indexing
-- Constraint validation
-
-### 3. Migration Features
-- Extension management (`uuid-ossp`)
-- Schema validation
-- Rollback operations
-- Connection pooling
+1. **Separation of Concerns**: Each test type has its own directory
+2. **Clear Naming**: Test names clearly indicate what they test
+3. **Proper Scope**: Tests are scoped appropriately (unit vs integration)
+4. **Maintainability**: Tests are easy to find and maintain
+5. **Documentation**: Each test directory has clear documentation
 
 ## Best Practices
 
-### 1. Test Isolation
-- Each test should be independent
-- Use fixtures for setup/teardown
-- Clean up test data after each test
+1. **Unit Tests**: Should be fast and isolated
+2. **Integration Tests**: Should test real interactions
+3. **E2E Tests**: Should test complete workflows
+4. **Debug Tests**: Should help with troubleshooting
+5. **Performance Tests**: Should measure actual performance
 
-### 2. Database Cleanup
-```python
-@pytest_asyncio.fixture
-async def clean_database():
-    """Clean database fixture for tests"""
-    await database.connect()
-    # Clean up test data
-    yield
-    # Clean up after tests
-    await database.disconnect()
-```
+## Adding New Tests
 
-### 3. Environment Configuration
-- Use environment variables for database configuration
-- Test both SQLite and PostgreSQL paths
-- Validate configuration in tests
-
-### 4. Error Handling
-- Test both success and failure scenarios
-- Validate error messages and status codes
-- Test constraint violations
-
-## Database Setup
-
-### Quick Setup
-
-#### Windows
-```powershell
-# Run the setup script
-.\scripts\setup-test-db.ps1
-
-# Or with verbose output
-.\scripts\setup-test-db.ps1 -Verbose
-```
-
-#### Linux/macOS
-```bash
-# Make script executable (first time only)
-chmod +x scripts/setup-test-db.sh
-
-# Run the setup script
-./scripts/setup-test-db.sh
-
-# Or with verbose output
-./scripts/setup-test-db.sh --verbose
-```
-
-### Manual Setup
-
-#### 1. Install PostgreSQL
-```bash
-# Ubuntu/Debian
-sudo apt-get install postgresql postgresql-contrib
-
-# macOS
-brew install postgresql
-
-# Windows (using Chocolatey)
-choco install postgresql
-```
-
-#### 2. Start PostgreSQL Service
-```bash
-# Ubuntu/Debian
-sudo systemctl start postgresql
-
-# macOS
-brew services start postgresql
-
-# Windows
-net start postgresql
-```
-
-#### 3. Create Test Database
-```bash
-# Connect to PostgreSQL
-psql -U postgres
-
-# Create test database
-CREATE DATABASE test_db;
-
-# Exit
-\q
-```
-
-#### 4. Set Environment Variables
-```bash
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=test_db
-export DB_USER=postgres
-export DB_PASSWORD=postgres
-export ENVIRONMENT=test
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### PostgreSQL Connection Issues
-```bash
-# Check if PostgreSQL is running
-sudo systemctl status postgresql
-
-# Check connection
-psql -h localhost -p 5432 -U postgres -d test_db
-```
-
-#### Test Environment Issues
-```bash
-# Clear test database
-rm -f test.db
-
-# Reset environment variables
-unset DB_HOST DB_NAME DB_USER DB_PASSWORD DB_PORT
-```
-
-#### CI/CD Issues
-- Check PostgreSQL service container logs
-- Verify environment variables are set
-- Ensure database is ready before running tests
-
-### Debugging Tests
-
-#### Verbose Output
-```bash
-pytest tests/ -v -s --tb=long
-```
-
-#### Database Debugging
-```python
-# Add to test for debugging
-print(f"Database URL: {settings.get_database_url()}")
-print(f"Environment: {settings.environment}")
-```
-
-## Migration Testing Strategy
-
-### 1. Unit Tests (SQLite)
-- Test migration logic and dependencies
-- Validate migration manager functionality
-- Test schema fixes and table recreation
-
-### 2. Integration Tests (PostgreSQL)
-- Test actual migration execution
-- Validate PostgreSQL-specific features
-- Test rollback operations
-- Verify data integrity
-
-### 3. Production Parity
-- Use same PostgreSQL version as production
-- Test with production-like data
-- Validate performance characteristics
-
-This hybrid approach ensures both fast development feedback and comprehensive production validation. 
+1. **Choose the right category**: Unit, integration, e2e, performance, or debug
+2. **Follow naming conventions**: Use clear, descriptive names
+3. **Add to appropriate directory**: Place in the correct subdirectory
+4. **Update documentation**: Update this README if needed
+5. **Run tests**: Ensure all tests pass before committing 
