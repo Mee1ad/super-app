@@ -4,6 +4,40 @@ from core.sentry import init_sentry
 from core.exceptions import sentry_exception_handler
 from db.session import database
 from api.v1.api_v1 import v1_routes
+import logging
+import sys
+
+# Configure logging based on debug mode
+if settings.debug:
+    # Debug mode - show all details
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler('app.log') if settings.is_production else logging.NullHandler()
+        ]
+    )
+    # Set uvicorn access log to DEBUG level
+    logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
+    logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
+else:
+    # Production mode - minimal logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('app.log') if settings.is_production else logging.NullHandler()
+        ]
+    )
+
+logger = logging.getLogger(__name__)
+
+# Log startup information
+logger.info(f"Starting application in {'DEBUG' if settings.debug else 'PRODUCTION'} mode")
+logger.info(f"Environment: {settings.environment}")
+logger.info(f"Debug mode: {settings.debug}")
 
 # Initialize Sentry before creating the app
 init_sentry()
@@ -24,7 +58,17 @@ def ping() -> dict:
     Returns:
         dict: Health status with message and timestamp
     """
-    return {"message": "pong"}
+    logger.info("Health check endpoint called")
+    logger.debug("About to trigger division by zero error for testing")
+    
+    if settings.debug:
+        print("🔍 DEBUG: About to trigger division by zero error")
+        print("🔍 DEBUG: This should show detailed error information")
+    
+    # Intentionally trigger an error for testing
+    5 / 0
+    
+    return {"message": "pong", "status": "healthy"}
 
 @get(
     path="/test-sentry-error",
@@ -124,6 +168,34 @@ def test_500_error() -> dict:
     """
     # Intentionally throw an unhandled exception to test Sentry 500 error capturing
     raise RuntimeError("This is a test 500 error for Sentry integration testing")
+
+@get(
+    path="/test-simple-error",
+    tags=["Testing"],
+    summary="Test Simple Error",
+    description="Simple test endpoint that raises an error to test exception handling."
+)
+def test_simple_error() -> dict:
+    """
+    Simple test endpoint that raises an error to test exception handling.
+    
+    This endpoint is used for testing purposes only to ensure that exceptions
+    are properly handled and logged.
+    
+    Returns:
+        dict: This should never be reached as an error is thrown
+        
+    Raises:
+        ValueError: Always raised for testing purposes
+    """
+    logger.info("Simple error test endpoint called")
+    print("🔍 DEBUG: Simple error test endpoint called")
+    print("🔍 DEBUG: About to raise ValueError")
+    
+    # Raise a simple error
+    raise ValueError("This is a simple test error")
+    
+    return {"message": "This should never be reached"}
 
 @get(
     path="/deployment",
@@ -247,6 +319,7 @@ app = Esmerald(
         Gateway(handler=test_sentry_message),
         Gateway(handler=test_sentry_context),
         Gateway(handler=test_500_error),
+        Gateway(handler=test_simple_error),
         Gateway(handler=deployment_info),
         # V1 API routes - all under /api/v1/
         Include(routes=v1_routes, path="/api/v1"),
@@ -257,6 +330,7 @@ app = Esmerald(
     title="LifeHub API",
     version="1.0.0",
     exception_handlers={Exception: sentry_exception_handler},
+    debug=settings.debug,  # Enable debug mode in Esmerald
     description="""# LifeHub API
 
 A comprehensive REST API for managing todo lists, ideas, diary entries, and food planning with JWT authentication, real-time search, and bulk operations.

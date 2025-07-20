@@ -3,6 +3,8 @@ from esmerald.exceptions import HTTPException as EsmeraldHTTPException
 from typing import Any, Dict, Optional
 import logging
 from core.sentry_utils import capture_error, set_context
+import traceback
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -11,9 +13,39 @@ class SentryExceptionHandler:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        print("🔧 SentryExceptionHandler initialized")
     
     async def __call__(self, request: Request, exc: Exception) -> Response:
         """Handle exceptions and capture them in Sentry"""
+        
+        print("🚨 SENTRY EXCEPTION HANDLER CALLED!")
+        print(f"   Method: {request.method}")
+        print(f"   Path: {request.url.path}")
+        print(f"   Exception: {type(exc).__name__}: {exc}")
+        
+        # Log the full error details to console
+        self.logger.error(
+            f"Unhandled exception in {request.method} {request.url.path}: {exc}",
+            exc_info=True
+        )
+        
+        # Print detailed error information in debug mode
+        if settings.debug:
+            print("\n" + "="*80)
+            print("🚨 DEBUG MODE - DETAILED ERROR INFORMATION")
+            print("="*80)
+            print(f"❌ ERROR: {request.method} {request.url.path}")
+            print(f"   Exception Type: {type(exc).__name__}")
+            print(f"   Exception Message: {exc}")
+            print(f"   Request Headers: {dict(request.headers)}")
+            print(f"   Client IP: {request.client.host if request.client else 'Unknown'}")
+            print(f"   User Agent: {request.headers.get('user-agent', 'Unknown')}")
+            print("\n📋 FULL TRACEBACK:")
+            traceback.print_exc()
+            print("="*80 + "\n")
+        else:
+            # Production mode - minimal error output
+            print(f"❌ ERROR: {request.method} {request.url.path} - {type(exc).__name__}: {exc}")
         
         # Set request context for Sentry
         set_context("request", {
@@ -38,12 +70,6 @@ class SentryExceptionHandler:
             "request_id": getattr(request, "request_id", None),
         })
         
-        # Log the error
-        self.logger.error(
-            f"Unhandled exception in {request.method} {request.url.path}: {exc}",
-            exc_info=True
-        )
-        
         # Return appropriate error response
         if isinstance(exc, HTTPException):
             return Response(
@@ -59,9 +85,10 @@ class SentryExceptionHandler:
             )
         else:
             # Generic 500 error for unhandled exceptions
+            error_detail = str(exc) if settings.debug else "Internal server error"
             return Response(
                 content={
-                    "detail": "Internal server error",
+                    "detail": error_detail,
                     "error_code": "INTERNAL_ERROR",
                     "request_id": getattr(request, "request_id", None)
                 },

@@ -4,6 +4,7 @@ from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from core.config import settings
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +75,20 @@ def init_sentry():
 
 def before_send_filter(event, hint):
     """Filter events before sending to Sentry"""
-    # Don't send events in development unless explicitly configured
-    if settings.sentry_environment == "development" and not settings.sentry_debug:
-        return None
+    if settings.debug:
+        print(f"🔍 Sentry before_send_filter called")
+        print(f"   Environment: {settings.sentry_environment}")
+        print(f"   Debug mode: {settings.sentry_debug}")
+        print(f"   Event type: {event.get('type', 'unknown')}")
+        if hint and 'exc_info' in hint:
+            exc_type, exc_value, exc_traceback = hint['exc_info']
+            print(f"   Exception: {exc_type.__name__}: {exc_value}")
     
-    # Block all events from localhost/development
-    if settings.sentry_environment == "development":
+    # Only block events in development if debug is disabled
+    if settings.sentry_environment == "development" and not settings.sentry_debug:
+        if settings.debug:
+            print("   ❌ Sentry event blocked in development mode (debug disabled)")
+        logger.debug("Sentry event blocked in development mode (debug disabled)")
         return None
     
     # Filter out certain error types if needed
@@ -87,18 +96,20 @@ def before_send_filter(event, hint):
         exc_type, exc_value, exc_traceback = hint['exc_info']
         # Example: Filter out specific exceptions
         if isinstance(exc_value, KeyboardInterrupt):
+            if settings.debug:
+                print("   ❌ Sentry event blocked - KeyboardInterrupt")
+            logger.debug("Sentry event blocked - KeyboardInterrupt")
             return None
     
+    if settings.debug:
+        print("   ✅ Sentry event allowed to be sent")
+    logger.debug("Sentry event allowed to be sent")
     return event
 
 def before_breadcrumb_filter(breadcrumb, hint):
     """Filter breadcrumbs before sending to Sentry"""
-    # Don't send breadcrumbs in development unless explicitly configured
+    # Only block breadcrumbs in development if debug is disabled
     if settings.sentry_environment == "development" and not settings.sentry_debug:
-        return None
-    
-    # Block all breadcrumbs from development
-    if settings.sentry_environment == "development":
         return None
     
     return breadcrumb
@@ -112,9 +123,7 @@ def test_sentry_connection():
             level="info"
         )
         logger.info("Sentry connection test message sent successfully")
+        print("✅ Sentry connection test message sent successfully")
     except Exception as e:
         logger.error(f"Failed to send Sentry test message: {e}")
-        print(f"Failed to send Sentry test message: {e}")
-
-# Import os for release tracking
-import os 
+        print(f"❌ Failed to send Sentry test message: {e}") 
