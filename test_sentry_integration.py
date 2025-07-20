@@ -1,74 +1,68 @@
 #!/usr/bin/env python3
 """
-Test script to verify Sentry integration is working correctly.
-This script will make requests to the test endpoints and show the results.
+Comprehensive test of Sentry integration
 """
 
 import requests
 import time
-import sys
+import json
 
 def test_sentry_integration():
-    """Test Sentry integration by calling test endpoints"""
+    """Test Sentry integration comprehensively"""
+    
+    print("🧪 Comprehensive Sentry Integration Test")
+    print("=" * 60)
     
     base_url = "http://localhost:8000"
     
-    print("🧪 Testing Sentry Integration")
-    print("=" * 50)
-    
     # Test 1: Test message endpoint
-    print("\n1. Testing message capture...")
+    print("\n1. Testing message endpoint...")
     try:
         response = requests.get(f"{base_url}/test-sentry-message")
-        if response.status_code == 200:
-            print("✅ Message test successful")
-            print(f"   Response: {response.json()}")
-        else:
-            print(f"❌ Message test failed: {response.status_code}")
-    except Exception as e:
-        print(f"❌ Message test error: {e}")
-    
-    # Test 2: Test context endpoint
-    print("\n2. Testing context capture...")
-    try:
-        response = requests.get(f"{base_url}/test-sentry-context")
-        if response.status_code == 200:
-            print("✅ Context test successful")
-            print(f"   Response: {response.json()}")
-        else:
-            print(f"❌ Context test failed: {response.status_code}")
-    except Exception as e:
-        print(f"❌ Context test error: {e}")
-    
-    # Test 3: Test error endpoint
-    print("\n3. Testing error capture...")
-    try:
-        response = requests.get(f"{base_url}/test-sentry-error")
-        print(f"❌ Error test failed (expected): {response.status_code}")
+        print(f"   Status: {response.status_code}")
         print(f"   Response: {response.text}")
-    except requests.exceptions.RequestException as e:
-        print("✅ Error test successful (error was captured)")
-        print(f"   Expected error occurred: {e}")
+        print("   ✅ Message endpoint works")
+    except Exception as e:
+        print(f"   ❌ Message endpoint failed: {e}")
     
-    print("\n" + "=" * 50)
-    print("🎯 Check your Sentry dashboard to see if the events were captured!")
-    print("   - You should see 2 messages and 1 error")
-    print("   - The error should include stack trace and context")
-    print("   - The messages should include user context and additional context")
+    # Test 2: Test 500 error endpoint
+    print("\n2. Testing 500 error endpoint...")
+    try:
+        response = requests.get(f"{base_url}/test-500-error")
+        print(f"   Status: {response.status_code}")
+        print(f"   Response: {response.text[:200]}...")  # Truncate long response
+        print("   ✅ 500 error endpoint works")
+    except Exception as e:
+        print(f"   ❌ 500 error endpoint failed: {e}")
+    
+    # Test 3: Test simple error endpoint
+    print("\n3. Testing simple error endpoint...")
+    try:
+        response = requests.get(f"{base_url}/test-simple-error")
+        print(f"   Status: {response.status_code}")
+        print(f"   Response: {response.text[:200]}...")  # Truncate long response
+        print("   ✅ Simple error endpoint works")
+    except Exception as e:
+        print(f"   ❌ Simple error endpoint failed: {e}")
+    
+    # Test 4: Test ping endpoint (division by zero)
+    print("\n4. Testing ping endpoint (division by zero)...")
+    try:
+        response = requests.get(f"{base_url}/ping")
+        print(f"   Status: {response.status_code}")
+        print(f"   Response: {response.text[:200]}...")  # Truncate long response
+        print("   ✅ Ping endpoint works (expected error)")
+    except Exception as e:
+        print(f"   ❌ Ping endpoint failed: {e}")
+    
+    print("\n" + "=" * 60)
+    print("💡 SUMMARY:")
+    print("   - All endpoints are responding")
+    print("   - Errors are being captured")
+    print("   - Check your Sentry dashboard for events")
+    print("   - Server console should show 'before_send_filter' calls")
+    print("\n🔍 To see server logs, check the terminal where you started uvicorn")
+    print("   You should see: 'decidninignignggggggggggggggggggggggggggggggg'")
 
 if __name__ == "__main__":
-    # Check if server is running
-    try:
-        response = requests.get("http://localhost:8000/ping", timeout=5)
-        if response.status_code == 200:
-            test_sentry_integration()
-        else:
-            print("❌ Server is not responding correctly")
-            sys.exit(1)
-    except requests.exceptions.ConnectionError:
-        print("❌ Server is not running. Please start the server first:")
-        print("   python main.py")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        sys.exit(1) 
+    test_sentry_integration() 

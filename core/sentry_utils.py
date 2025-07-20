@@ -2,6 +2,8 @@ import sentry_sdk
 from typing import Any, Dict, Optional
 from functools import wraps
 import logging
+import sys
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -9,8 +11,40 @@ def capture_error(error: Exception, context: Optional[Dict[str, Any]] = None) ->
     """Capture and report errors to Sentry"""
     if context:
         sentry_sdk.set_context("error_context", context)
+    
+    print("🔍 ABOUT TO CALL sentry_sdk.capture_exception - this should trigger before_send_filter")
+    # Use capture_exception which will go through before_send_filter
     sentry_sdk.capture_exception(error)
+    print("🔍 sentry_sdk.capture_exception called - check if before_send_filter was triggered")
     logger.error(f"Error captured by Sentry: {error}", exc_info=True)
+
+def setup_global_exception_handlers():
+    """Setup global exception handlers to catch all unhandled errors"""
+    
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        """Global exception handler for unhandled exceptions"""
+        if issubclass(exc_type, KeyboardInterrupt):
+            # Don't capture keyboard interrupts
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        
+        print(f"🚨 GLOBAL EXCEPTION HANDLER: {exc_type.__name__}: {exc_value}")
+        print("   This is an unhandled exception that wasn't caught by middleware")
+        
+        # Capture the error in Sentry
+        capture_error(exc_value, {
+            "error_type": "global_unhandled",
+            "exception_type": exc_type.__name__,
+            "capture_method": "global_handler"
+        })
+        
+        # Call the original exception hook
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+    
+    # Set the global exception handler
+    sys.excepthook = handle_exception
+    
+    print("✅ Global exception handlers setup complete")
 
 def capture_message(message: str, level: str = "info") -> None:
     """Capture and report messages to Sentry"""

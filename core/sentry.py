@@ -21,6 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def before_send_filter(event, hint):
+    print('decidninignignggggggggggggggggggggggggggggggg')
     """Filter events before sending to Sentry"""
     
     # Get environment and debug settings from settings object

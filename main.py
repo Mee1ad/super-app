@@ -44,6 +44,10 @@ logger.info(f"Debug mode: {settings.debug}")
 # Initialize Sentry before creating the app
 init_sentry()
 
+# Setup global exception handlers to catch all unhandled errors
+from core.sentry_utils import setup_global_exception_handlers
+setup_global_exception_handlers()
+
 @get(
     path="/ping",
     tags=["Health"],
@@ -67,8 +71,21 @@ def ping() -> dict:
         print("🔍 DEBUG: About to trigger division by zero error")
         print("🔍 DEBUG: This should show detailed error information")
     
-    # Intentionally trigger an error for testing
-    5 / 0
+    try:
+        # Intentionally trigger an error for testing
+        5 / 0
+    except Exception as e:
+        # Explicitly capture the error in Sentry
+        from core.sentry_utils import capture_error
+        print(f"🔍 EXPLICIT ERROR CAPTURE: {type(e).__name__}: {e}")
+        capture_error(e, {
+            "endpoint": "/ping",
+            "method": "GET",
+            "error_type": "division_by_zero",
+            "capture_method": "explicit"
+        })
+        # Re-raise to trigger the exception handler
+        raise
     
     return {"message": "pong", "status": "healthy"}
 
@@ -299,6 +316,48 @@ def deployment_info() -> dict:
     """Deployment and operations documentation endpoint."""
     return {"message": "See the documentation tab for deployment instructions."}
 
+@get(
+    path="/test-unhandled-issues",
+    tags=["Testing"],
+    summary="Test Unhandled Issues",
+    description="Test endpoint that demonstrates different types of unhandled issues."
+)
+def test_unhandled_issues() -> dict:
+    """
+    Test endpoint that demonstrates different types of unhandled issues.
+    
+    This endpoint is used for testing purposes only to ensure that different
+    types of unhandled exceptions are properly captured by Sentry.
+    
+    Returns:
+        dict: This should never be reached as an exception is thrown
+        
+    Raises:
+        Various exceptions: For testing different error types
+    """
+    import random
+    
+    # Randomly choose different types of unhandled issues
+    issue_type = random.randint(1, 5)
+    
+    if issue_type == 1:
+        # Type error
+        raise TypeError("This is an unhandled TypeError")
+    elif issue_type == 2:
+        # Attribute error
+        raise AttributeError("This is an unhandled AttributeError")
+    elif issue_type == 3:
+        # Index error
+        raise IndexError("This is an unhandled IndexError")
+    elif issue_type == 4:
+        # Key error
+        raise KeyError("This is an unhandled KeyError")
+    else:
+        # Custom exception
+        raise Exception("This is a generic unhandled exception")
+    
+    return {"message": "This should never be reached"}
+
 # Robust CORS configuration
 cors_config = CORSConfig(
     allow_origins=[
@@ -323,6 +382,7 @@ app = Esmerald(
         Gateway(handler=test_500_error),
         Gateway(handler=test_simple_error),
         Gateway(handler=deployment_info),
+        Gateway(handler=test_unhandled_issues),
         # V1 API routes - all under /api/v1/
         Include(routes=v1_routes, path="/api/v1"),
     ],
@@ -446,6 +506,9 @@ curl http://localhost:8000/ping
 ssh -i ./secrets/id_rsa postgres@YOUR_SERVER_IP
 ```""",
 )
+
+# Apply SentryMiddleware to capture errors before exception handler
+app = SentryMiddleware(app)
 
 @app.on_event("startup")
 async def startup():

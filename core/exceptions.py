@@ -18,6 +18,7 @@ class SentryExceptionHandler:
     async def __call__(self, request: Request, exc: Exception) -> Response:
         """Handle exceptions and capture them in Sentry"""
         
+        print(f"🚀 SENTRY EXCEPTION HANDLER START: {request.method} {request.url.path}")
         print("🚨 SENTRY EXCEPTION HANDLER CALLED!")
         print(f"   Method: {request.method}")
         print(f"   Path: {request.url.path}")
@@ -63,6 +64,7 @@ class SentryExceptionHandler:
                 "email": getattr(request.user, "email", None),
             })
         
+        print("🔍 ABOUT TO CALL capture_error - this should trigger before_send_filter")
         # Capture the exception in Sentry
         capture_error(exc, {
             "endpoint": str(request.url.path),
@@ -70,16 +72,17 @@ class SentryExceptionHandler:
             "request_id": getattr(request, "request_id", None),
             "handler": "SentryExceptionHandler"
         })
+        print("🔍 capture_error called - check if before_send_filter was triggered")
         
         # Return appropriate error response
         if isinstance(exc, HTTPException):
-            return Response(
+            response = Response(
                 content={"detail": str(exc.detail)},
                 status_code=exc.status_code,
                 media_type="application/json"
             )
         elif isinstance(exc, EsmeraldHTTPException):
-            return Response(
+            response = Response(
                 content={"detail": str(exc.detail)},
                 status_code=exc.status_code,
                 media_type="application/json"
@@ -87,7 +90,7 @@ class SentryExceptionHandler:
         else:
             # Generic 500 error for unhandled exceptions
             error_detail = str(exc) if settings.debug else "Internal server error"
-            return Response(
+            response = Response(
                 content={
                     "detail": error_detail,
                     "error_code": "INTERNAL_ERROR",
@@ -96,6 +99,9 @@ class SentryExceptionHandler:
                 status_code=500,
                 media_type="application/json"
             )
+        
+        print(f"✅ SENTRY EXCEPTION HANDLER END: {request.method} {request.url.path}")
+        return response
 
 # Global exception handler instance
 sentry_exception_handler = SentryExceptionHandler()

@@ -20,19 +20,42 @@ class SentryMiddleware:
         # Copy all attributes from the original app
         for attr_name in dir(self.app):
             if not attr_name.startswith('_') and not hasattr(self, attr_name):
-                attr_value = getattr(self.app, attr_name)
-                if callable(attr_value):
-                    # Bind the method to preserve 'self' context
-                    setattr(self, attr_name, attr_value.__get__(self.app, type(self.app)))
-                else:
-                    setattr(self, attr_name, attr_value)
+                try:
+                    attr_value = getattr(self.app, attr_name)
+                    if callable(attr_value):
+                        # Bind the method to preserve 'self' context
+                        setattr(self, attr_name, attr_value.__get__(self.app, type(self.app)))
+                    else:
+                        setattr(self, attr_name, attr_value)
+                except AttributeError:
+                    # Skip attributes that don't exist or can't be accessed
+                    continue
     
     async def __call__(self, scope, receive, send):
+        # Get request information from scope
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+        
+        print(f"🚀 SENTRY MIDDLEWARE START: {method} {path}")
+        
         try:
+            # Wrap the entire request processing
             await self.app(scope, receive, send)
+            print(f"✅ SENTRY MIDDLEWARE END (SUCCESS): {method} {path}")
         except Exception as exc:
+            print(f"🚨 SENTRY MIDDLEWARE CATCH ERROR: {method} {path}")
+            print(f"   Exception: {type(exc).__name__}: {exc}")
             # Capture the exception in Sentry
             self._capture_exception(exc, scope)
+            print(f"🔚 SENTRY MIDDLEWARE END (ERROR): {method} {path}")
+            raise
+        except BaseException as exc:
+            # Catch all other exceptions including SystemExit, KeyboardInterrupt
+            print(f"🚨 SENTRY MIDDLEWARE CATCH BASE EXCEPTION: {method} {path}")
+            print(f"   Exception: {type(exc).__name__}: {exc}")
+            # Capture the exception in Sentry
+            self._capture_exception(exc, scope)
+            print(f"🔚 SENTRY MIDDLEWARE END (BASE ERROR): {method} {path}")
             raise
     
     def _capture_exception(self, exc: Exception, scope: Dict[str, Any]):
