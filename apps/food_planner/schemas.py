@@ -17,7 +17,7 @@ class MealTypeResponse(MealTypeBase):
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 
 class FoodEntryBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
+    title: str = Field(..., min_length=1, max_length=255)
     category: str = Field(..., pattern=r'^(planned|eaten)$')
     meal_type_id: UUID
     time: str = Field(..., pattern=r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')  # HH:MM format
@@ -32,7 +32,7 @@ class FoodEntryCreate(FoodEntryBase):
     pass
 
 class FoodEntryUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None, pattern=r'^(planned|eaten)$')
     meal_type_id: Optional[UUID] = Field(None)
     time: Optional[str] = Field(None, pattern=r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')
