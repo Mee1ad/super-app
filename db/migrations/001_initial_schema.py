@@ -33,7 +33,7 @@ class InitialSchemaMigration(Migration):
         # Create roles table first (this one needs manual creation)
         await self.database.execute(f'''
             CREATE TABLE IF NOT EXISTS roles (
-                id TEXT PRIMARY KEY DEFAULT {uuid_func},
+                id UUID PRIMARY KEY DEFAULT {uuid_func},
                 name VARCHAR(255) UNIQUE NOT NULL,
                 description TEXT,
                 permissions TEXT NOT NULL,
