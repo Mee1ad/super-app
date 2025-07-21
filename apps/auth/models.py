@@ -4,12 +4,18 @@ from edgy import Model, fields, Manager
 
 from db.base import UUIDBaseModel
 from db.session import models_registry
+import uuid
 
 
 class Role(UUIDBaseModel):
     """Model for user roles"""
     objects: ClassVar[Manager] = Manager()
-    
+
+    id = fields.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        help_text="Unique identifier for the record"
+    )
     name = fields.CharField(max_length=50, unique=True)
     description = fields.TextField(null=True)
     permissions = fields.JSONField(default=dict)  # Store permissions as JSON
