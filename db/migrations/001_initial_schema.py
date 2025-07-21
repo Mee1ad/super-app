@@ -30,18 +30,6 @@ class InitialSchemaMigration(Migration):
             # Create PostgreSQL extension
             await self.database.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
         
-        # Create roles table first (this one needs manual creation)
-        await self.database.execute(f'''
-            CREATE TABLE IF NOT EXISTS roles (
-                id UUID PRIMARY KEY DEFAULT {uuid_func},
-                name VARCHAR(255) UNIQUE NOT NULL,
-                description TEXT,
-                permissions TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT {timestamp_default},
-                updated_at TIMESTAMP DEFAULT {timestamp_default}
-            )
-        ''')
-        
         # Import all models to ensure they are registered
         from apps.todo.models import List, Task, ShoppingItem
         from apps.auth.models import User, Role
@@ -50,7 +38,7 @@ class InitialSchemaMigration(Migration):
         from apps.diary.models import Mood, DiaryEntry
         from apps.food_planner.models import MealType, FoodEntry
         
-        # Create all other tables using the registry (including moods and meal_types)
+        # Create all tables using the registry (including roles table)
         await models_registry.create_all()
     
     async def down(self) -> None:
