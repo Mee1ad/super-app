@@ -1,3 +1,11 @@
+import asyncio
+import sys
+import platform
+
+# Fix for Windows event loop issue with psycopg
+if platform.system() == "Windows":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from esmerald import Esmerald, Gateway, get, CORSConfig, Include, Request, options
 from core.config import settings
 from core.sentry import init_sentry
@@ -8,7 +16,6 @@ from db.session import database
 from api.v1.api_v1 import v1_routes
 from datetime import datetime
 import logging
-import sys
 
 # Configure logging based on debug mode
 if settings.debug:

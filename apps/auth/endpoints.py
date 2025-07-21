@@ -1,4 +1,4 @@
-from esmerald import post, get, HTTPException, status
+from esmerald import post, get, HTTPException, status, Body, Request
 from esmerald import Response
 import json
 from apps.auth.schemas import GoogleAuthRequest, RefreshTokenRequest, LoginResponse, TokenResponse
@@ -13,10 +13,12 @@ import urllib.parse
     summary="Login with Google OAuth",
     description="Authenticate user using Google OAuth authorization code"
 )
-async def google_login(request: GoogleAuthRequest) -> LoginResponse:
+async def google_login(request: Request) -> LoginResponse:
     """Login with Google OAuth"""
     try:
-        return await authenticate_with_google(request.code)
+        body = await request.json()
+        google_auth_request = GoogleAuthRequest(**body)
+        return await authenticate_with_google(google_auth_request.code)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -29,7 +31,7 @@ async def google_login(request: GoogleAuthRequest) -> LoginResponse:
         )
 
 @get(
-    path="",
+    path="/google/callback",
     tags=["Authentication"],
     summary="Google OAuth Callback",
     description="Handle Google OAuth callback at /api/v1/auth/google/callback"
@@ -38,8 +40,8 @@ async def google_callback(code: str) -> Response:
     try:
         result = await authenticate_with_google(code)
         # Prepare user data and tokens for frontend
-        user_data = result.user.dict()
-        tokens = result.tokens.dict()
+        user_data = result.user.model_dump()
+        tokens = result.tokens.model_dump()
         # You can use query params or fragment. Here, we'll use fragment for security (not sent to server on redirect)
         # Example: /#user=...&tokens=...
         # But for simplicity, let's use query params (frontend should handle parsing and storing securely)
@@ -57,10 +59,12 @@ async def google_callback(code: str) -> Response:
     summary="Refresh access token",
     description="Get new access token using refresh token"
 )
-async def refresh_token(request: RefreshTokenRequest) -> TokenResponse:
+async def refresh_token(request: Request) -> TokenResponse:
     """Refresh access token"""
     try:
-        return await refresh_access_token(request.refresh_token)
+        body = await request.json()
+        refresh_token_request = RefreshTokenRequest(**body)
+        return await refresh_access_token(refresh_token_request.refresh_token)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

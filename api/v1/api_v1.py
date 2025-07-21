@@ -33,7 +33,7 @@ v1_routes = [
     Gateway(handler=google_login, path="/auth"),
     Gateway(handler=refresh_token, path="/auth"),
     Gateway(handler=get_google_auth_url, path="/auth"),
-    Gateway(handler=google_callback, path="/auth/google/callback"),
+    Gateway(handler=google_callback, path="/auth"),
     
     # Todo endpoints
     Gateway(handler=get_lists, path="/lists"),

@@ -153,8 +153,8 @@ class MigrationManager:
                             name VARCHAR(255) NOT NULL,
                             description TEXT,
                             dependencies TEXT,
-                            created_at DATETIME DEFAULT DATETIME('now'),
-                            applied_at DATETIME DEFAULT DATETIME('now')
+                            created_at DATETIME DEFAULT (DATETIME('now')),
+                            applied_at DATETIME DEFAULT (DATETIME('now'))
                         )
                     """)
                     
