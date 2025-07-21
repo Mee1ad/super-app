@@ -1,14 +1,34 @@
 # Database session management 
+import logging
 from edgy import Database, Registry
 from core.config import settings
 
+logger = logging.getLogger(__name__)
+
 # Create database instance with environment-aware configuration
-database = Database(settings.get_database_url())
+try:
+    database_url = settings.get_database_url()
+    logger.info(f"Initializing database with URL: {database_url[:20]}...")
+    database = Database(database_url)
+    logger.info("Database instance created successfully")
+except Exception as e:
+    logger.error(f"Failed to create database instance: {type(e).__name__}: {e}", exc_info=True)
+    raise
 
 # Create a shared registry instance
-models_registry = Registry(database=database)
+try:
+    models_registry = Registry(database=database)
+    logger.info("Models registry created successfully")
+except Exception as e:
+    logger.error(f"Failed to create models registry: {type(e).__name__}: {e}", exc_info=True)
+    raise
 
 # Import all models to ensure registration
-import db.models
+try:
+    import db.models
+    logger.info("Database models imported successfully")
+except Exception as e:
+    logger.error(f"Failed to import database models: {type(e).__name__}: {e}", exc_info=True)
+    raise
 
 # Note: Models will import models_registry directly to avoid circular imports 

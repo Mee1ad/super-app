@@ -20,7 +20,24 @@ class ListService:
     
     async def get_all_lists(self, user_id: UUID) -> ListType[List]:
         """Get all lists for a specific user ordered by creation date"""
-        return await List.query.filter(user_id=user_id).all().order_by("-created_at")
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            logger.debug(f"Getting all lists for user: {user_id}")
+            lists = await List.query.filter(user_id=user_id).all().order_by("-created_at")
+            logger.debug(f"Retrieved {len(lists)} lists for user {user_id}")
+            return lists
+        except Exception as e:
+            logger.error(f"Error in get_all_lists: {type(e).__name__}: {e}", exc_info=True)
+            # Capture error in Sentry
+            from core.sentry_utils import capture_error
+            capture_error(e, {
+                "function": "get_all_lists",
+                "user_id": str(user_id),
+                "error_type": "list_service_error"
+            })
+            raise
     
     async def get_list_by_id(self, list_id: UUID, user_id: UUID) -> List:
         """Get a list by ID for a specific user"""

@@ -241,6 +241,97 @@ def test_ping_error() -> dict:
 
 
 @get(
+    path="/test-auth-error",
+    tags=["Testing"],
+    summary="Test Auth Error",
+    description="Test endpoint that simulates authentication errors for testing error handling."
+)
+async def test_auth_error(request: Request) -> dict:
+    """
+    Test endpoint that simulates authentication errors for testing.
+    
+    This endpoint is used for testing purposes only to ensure that authentication
+    errors are properly captured and reported to Sentry.
+    
+    Returns:
+        dict: Success message if authentication works
+        
+    Raises:
+        HTTPException: If authentication fails
+    """
+    logger.info("Test auth error endpoint called")
+    
+    try:
+        # Try to get current user - this will trigger authentication flow
+        from core.dependencies import get_current_user_dependency
+        user = await get_current_user_dependency(request)
+        logger.info(f"Authentication successful for user: {user.id}")
+        return {"message": "Authentication successful", "user_id": str(user.id)}
+    except Exception as e:
+        logger.error(f"Authentication error in test endpoint: {type(e).__name__}: {e}", exc_info=True)
+        # Capture error in Sentry
+        from core.sentry_utils import capture_error
+        capture_error(e, {
+            "endpoint": "/test-auth-error",
+            "method": "GET",
+            "error_type": "auth_test_error",
+            "auth_header": request.headers.get("Authorization", "missing")
+        })
+        raise
+
+
+@get(
+    path="/test-lists-debug",
+    tags=["Testing"],
+    summary="Test Lists Debug",
+    description="Test endpoint to debug lists functionality without authentication."
+)
+async def test_lists_debug() -> dict:
+    """
+    Test endpoint to debug lists functionality without authentication.
+    
+    This endpoint is used for testing purposes only to ensure that the lists
+    service is working properly without authentication issues.
+    
+    Returns:
+        dict: Debug information about lists service
+    """
+    logger.info("Test lists debug endpoint called")
+    
+    try:
+        # Test database connection
+        from db.session import database
+        await database.connect()
+        logger.info("Database connection successful")
+        
+        # Test lists service
+        from apps.todo.services import ListService
+        list_service = ListService(database)
+        logger.info("List service initialized successfully")
+        
+        # Test getting all lists (this might fail without user_id, but we'll catch the error)
+        try:
+            # This will likely fail because we don't have a user_id, but we want to see the error
+            lists = await list_service.get_all_lists("test-user-id")
+            logger.info(f"Retrieved {len(lists)} lists")
+            return {"message": "Lists service working", "lists_count": len(lists)}
+        except Exception as e:
+            logger.warning(f"Expected error in lists service: {type(e).__name__}: {e}")
+            return {"message": "Lists service error (expected)", "error": str(e)}
+            
+    except Exception as e:
+        logger.error(f"Error in test_lists_debug: {type(e).__name__}: {e}", exc_info=True)
+        # Capture error in Sentry
+        from core.sentry_utils import capture_error
+        capture_error(e, {
+            "endpoint": "/test-lists-debug",
+            "method": "GET",
+            "error_type": "lists_debug_error"
+        })
+        return {"message": "Error in lists debug", "error": str(e)}
+
+
+@get(
     path="/deployment",
     tags=["Deployment"],
     summary="Deployment & Operations Guide",
@@ -406,6 +497,8 @@ app = Esmerald(
         Gateway(handler=test_500_error),
         Gateway(handler=test_simple_error),
         Gateway(handler=test_ping_error),
+        Gateway(handler=test_auth_error),
+        Gateway(handler=test_lists_debug),
         Gateway(handler=deployment_info),
         Gateway(handler=test_unhandled_issues),
         # V1 API routes - all under /api/v1/

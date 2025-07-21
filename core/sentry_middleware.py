@@ -38,9 +38,19 @@ class SentryMiddleware:
         
         print(f"🚀 SENTRY MIDDLEWARE START: {method} {path}")
         
+        # Create a custom send function to intercept responses
+        async def intercept_send(message):
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 200)
+                if status_code >= 400:
+                    print(f"🚨 SENTRY MIDDLEWARE - HTTP ERROR DETECTED: {method} {path} - Status: {status_code}")
+                    # Capture HTTP errors that might not raise exceptions
+                    self._capture_http_error(status_code, scope, message)
+            await send(message)
+        
         try:
             # Wrap the entire request processing
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, intercept_send)
             print(f"✅ SENTRY MIDDLEWARE END (SUCCESS): {method} {path}")
         except Exception as exc:
             print(f"🚨 SENTRY MIDDLEWARE CATCH ERROR: {method} {path}")
@@ -93,4 +103,45 @@ class SentryMiddleware:
             "middleware": "SentryMiddleware"
         })
         
-        logger.error(f"Error captured by Sentry middleware: {exc}", exc_info=True) 
+        logger.error(f"Error captured by Sentry middleware: {exc}", exc_info=True)
+    
+    def _capture_http_error(self, status_code: int, scope: Dict[str, Any], message: Dict[str, Any]):
+        """Capture HTTP errors that don't raise exceptions"""
+        
+        # Get request information from scope
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+        headers = dict(scope.get("headers", []))
+        
+        # Print debug information
+        if settings.debug:
+            print("\n" + "="*80)
+            print("🚨 SENTRY MIDDLEWARE - HTTP ERROR CAPTURED")
+            print("="*80)
+            print(f"❌ HTTP ERROR: {method} {path}")
+            print(f"   Status Code: {status_code}")
+            print(f"   Headers: {headers}")
+            print("="*80 + "\n")
+        
+        # Set context for Sentry
+        set_context("request", {
+            "method": method,
+            "url": path,
+            "headers": headers,
+        })
+        
+        # Create a synthetic exception for HTTP errors
+        from core.sentry_utils import capture_message
+        capture_message(
+            f"HTTP {status_code} error on {method} {path}",
+            "error",
+            {
+                "endpoint": path,
+                "method": method,
+                "status_code": status_code,
+                "middleware": "SentryMiddleware",
+                "error_type": "http_error"
+            }
+        )
+        
+        logger.error(f"HTTP {status_code} error captured by Sentry middleware: {method} {path}") 

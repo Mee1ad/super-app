@@ -116,14 +116,31 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
 
 async def get_current_user(token: str) -> Optional[User]:
     """Get current user from JWT token"""
-    from core.security import get_current_user_from_token
+    import logging
+    logger = logging.getLogger(__name__)
     
-    user_info = get_current_user_from_token(token)
-    if not user_info:
-        return None
-    
-    user = await User.objects.get(id=user_info["id"])
-    if not user or not user.is_active:
-        return None
-    
-    return user 
+    try:
+        from core.security import get_current_user_from_token
+        
+        user_info = get_current_user_from_token(token)
+        if not user_info:
+            logger.warning("Invalid token - no user info extracted")
+            return None
+        
+        user = await User.objects.get(id=user_info["id"])
+        if not user or not user.is_active:
+            logger.warning(f"User not found or inactive: {user_info.get('id')}")
+            return None
+        
+        logger.debug(f"User retrieved successfully: {user.id}")
+        return user
+    except Exception as e:
+        logger.error(f"Error in get_current_user: {type(e).__name__}: {e}", exc_info=True)
+        # Capture error in Sentry
+        from core.sentry_utils import capture_error
+        capture_error(e, {
+            "function": "get_current_user",
+            "error_type": "auth_service_error",
+            "token_length": len(token) if token else 0
+        })
+        return None 

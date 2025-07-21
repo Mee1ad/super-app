@@ -39,28 +39,60 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify and decode a JWT token"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        logger.debug("Token verified successfully")
         return payload
-    except JWTError:
+    except JWTError as e:
+        logger.warning(f"JWT verification failed: {type(e).__name__}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error in verify_token: {type(e).__name__}: {e}", exc_info=True)
+        # Capture error in Sentry
+        from core.sentry_utils import capture_error
+        capture_error(e, {
+            "function": "verify_token",
+            "error_type": "jwt_error",
+            "token_length": len(token) if token else 0
+        })
         return None
 
 def get_current_user_from_token(token: str) -> Optional[Dict[str, Any]]:
     """Get current user from JWT token"""
-    payload = verify_token(token)
-    if payload is None:
-        return None
+    import logging
+    logger = logging.getLogger(__name__)
     
-    user_id: str = payload.get("sub", "")
-    if not user_id:
+    try:
+        payload = verify_token(token)
+        if payload is None:
+            logger.warning("Token verification failed - no payload")
+            return None
+        
+        user_id: str = payload.get("sub", "")
+        if not user_id:
+            logger.warning("Token payload missing 'sub' field")
+            return None
+        
+        logger.debug(f"Token verified successfully for user: {user_id}")
+        return {
+            "id": user_id,
+            "email": payload.get("email"),
+            "name": payload.get("name"),
+            "picture": payload.get("picture")
+        }
+    except Exception as e:
+        logger.error(f"Error in get_current_user_from_token: {type(e).__name__}: {e}", exc_info=True)
+        # Capture error in Sentry
+        from core.sentry_utils import capture_error
+        capture_error(e, {
+            "function": "get_current_user_from_token",
+            "error_type": "security_error",
+            "token_length": len(token) if token else 0
+        })
         return None
-    
-    return {
-        "id": user_id,
-        "email": payload.get("email"),
-        "name": payload.get("name"),
-        "picture": payload.get("picture")
-    }
 
 async def get_google_user_info(access_token: str) -> Optional[Dict[str, Any]]:
     """Get user info from Google using access token"""

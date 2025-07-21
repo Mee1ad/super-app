@@ -46,9 +46,29 @@ async def get_lists(request: Request) -> ListType[ListResponse]:
         401: Authentication required - Include valid Authorization header
         429: Rate limit exceeded - Too many requests, retry after delay
     """
-    user_id = await get_current_user_id(request)
-    lists = await list_service.get_all_lists(user_id)
-    return [ListResponse.model_validate_from_orm(list_obj) for list_obj in lists]
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"Getting lists for request: {request.method} {request.url.path}")
+        user_id = await get_current_user_id(request)
+        logger.info(f"User ID obtained: {user_id}")
+        
+        lists = await list_service.get_all_lists(user_id)
+        logger.info(f"Retrieved {len(lists)} lists for user {user_id}")
+        
+        return [ListResponse.model_validate_from_orm(list_obj) for list_obj in lists]
+    except Exception as e:
+        logger.error(f"Error in get_lists: {type(e).__name__}: {e}", exc_info=True)
+        # Capture error in Sentry
+        from core.sentry_utils import capture_error
+        capture_error(e, {
+            "endpoint": "/api/v1/lists",
+            "method": "GET",
+            "user_id": str(getattr(request, 'user_id', 'unknown')),
+            "error_type": "get_lists_error"
+        })
+        raise
 
 
 @post(
