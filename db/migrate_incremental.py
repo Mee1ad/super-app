@@ -44,7 +44,8 @@ def register_migrations():
             "db/migrations/005_seed_initial_data.py",
             "db/migrations/006_add_anonymous_changelog_views.py",
             "db/migrations/007_unified_changelog_tracking.py",
-            "db/migrations/008_add_user_id_to_tables.py"
+            "db/migrations/008_add_user_id_to_tables.py",
+            "db/migrations/009_fix_food_entries_schema.py"
         ]
         
         for migration_file in migration_files:

@@ -40,7 +40,7 @@ class FoodEntryService:
         
         # Apply filters
         if search:
-            query = query.filter(title__icontains=search)
+            query = query.filter(name__icontains=search)
         if category:
             query = query.filter(category=category)
         if meal_type:
