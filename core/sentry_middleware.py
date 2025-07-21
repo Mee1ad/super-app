@@ -136,10 +136,10 @@ class SentryMiddleware:
                 self.headers = headers
                 super().__init__(f"HTTP {status_code} error on {method} {path}")
         
-        # Create the exception with current stack trace
+        # Create the exception
         http_error = HTTPError(status_code, method, path, headers)
         
-        # Add debugging information for 404 errors
+        # Add debugging information for specific error codes
         if status_code == 404:
             # Get available routes for debugging
             try:
@@ -165,6 +165,21 @@ class SentryMiddleware:
                 # If we can't get routes, just log the error
                 logger.warning(f"Could not get available routes for 404 debugging: {e}")
         
+        elif status_code == 422:
+            # Add debugging information for 422 validation errors
+            set_context("debug_422", {
+                "requested_path": path,
+                "requested_method": method,
+                "suggestion": "This is likely a validation error. Check request body, query parameters, or authentication.",
+                "common_causes": [
+                    "Invalid request body format",
+                    "Missing required fields",
+                    "Invalid data types",
+                    "Authentication token issues",
+                    "Database constraint violations"
+                ]
+            })
+        
         # Set context for Sentry
         set_context("request", {
             "method": method,
@@ -172,13 +187,34 @@ class SentryMiddleware:
             "headers": headers,
         })
         
+        # Add breadcrumbs to trace the request flow
+        from core.sentry_utils import add_breadcrumb
+        add_breadcrumb(
+            category="http",
+            message=f"HTTP {status_code} error on {method} {path}",
+            level="error",
+            data={
+                "status_code": status_code,
+                "method": method,
+                "url": path,
+                "error_type": "http_error"
+            }
+        )
+        
         set_context("http_error", {
             "endpoint": path,
             "method": method,
             "status_code": status_code,
             "middleware": "SentryMiddleware",
             "error_type": "http_error",
-            "response_body": message.get("body", b"").decode("utf-8", errors="ignore") if message.get("body") else None
+            "response_body": message.get("body", b"").decode("utf-8", errors="ignore") if message.get("body") else None,
+            "stack_trace": traceback.format_stack(),
+            "error_details": f"HTTP {status_code} error occurred on {method} {path}. This error was captured by the Sentry middleware.",
+            "request_headers": dict(headers),
+            "response_headers": dict(message.get("headers", [])),
+            "query_string": scope.get("query_string", b"").decode("utf-8", errors="ignore"),
+            "client": scope.get("client", ["unknown", 0]),
+            "server": scope.get("server", ["unknown", 0])
         })
         
         # Capture the exception with full stack trace
