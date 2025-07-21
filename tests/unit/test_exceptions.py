@@ -48,6 +48,7 @@ class TestSentryExceptionHandler:
             "endpoint": "/test",
             "method": "GET",
             "request_id": "test-123",
+            "handler": "SentryExceptionHandler"
         })
         # Verify context was set
         mock_set_context.assert_called()
