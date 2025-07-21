@@ -6,6 +6,7 @@ from core.sentry_middleware import SentryMiddleware
 from core.sentry_decorator import capture_sentry_errors
 from db.session import database
 from api.v1.api_v1 import v1_routes
+from datetime import datetime
 import logging
 import sys
 
@@ -49,6 +50,33 @@ from core.sentry_utils import setup_global_exception_handlers
 setup_global_exception_handlers()
 
 @get(
+    path="/",
+    tags=["Root"],
+    summary="API Root",
+    description="Root endpoint that provides API information and available endpoints."
+)
+def root() -> dict:
+    """
+    Root endpoint providing API information.
+    
+    Returns:
+        dict: API information and available endpoints
+    """
+    return {
+        "message": "LifeHub API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "health": "/ping",
+            "api": "/api/v1/",
+            "documentation": "/openapi",
+            "deployment_info": "/deployment"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@get(
     path="/ping",
     tags=["Health"],
     summary="Health check",
@@ -67,268 +95,24 @@ def ping() -> dict:
     logger.info("Health check endpoint called")
     return {"message": "pong", "status": "healthy"}
 
-@get(
-    path="/test-sentry-error",
-    tags=["Testing"],
-    summary="Test Sentry Error",
-    description="Intentionally throws an error to test Sentry error capturing."
-)
-def test_sentry_error() -> dict:
-    """
-    Test endpoint that intentionally throws an error to verify Sentry integration.
-    
-    This endpoint is used for testing purposes only to ensure that errors
-    are properly captured and reported to Sentry.
-    
-    Returns:
-        dict: This should never be reached as an error is thrown
-        
-    Raises:
-        ValueError: Always raised for testing purposes
-    """
-    # Intentionally throw an error to test Sentry
-    raise ValueError("This is a test error for Sentry integration testing")
-
-@get(
-    path="/test-sentry-message",
-    tags=["Testing"],
-    summary="Test Sentry Message",
-    description="Sends a test message to Sentry for testing purposes."
-)
-def test_sentry_message() -> dict:
-    """
-    Test endpoint that sends a test message to Sentry.
-    
-    This endpoint is used for testing purposes only to ensure that messages
-    are properly captured and reported to Sentry.
-    
-    Returns:
-        dict: Success message
-    """
-    from core.sentry_utils import capture_message
-    
-    capture_message("This is a test message from the API", "info")
-    return {"message": "Test message sent to Sentry"}
-
-@get(
-    path="/test-sentry-context",
-    tags=["Testing"],
-    summary="Test Sentry Context",
-    description="Sets user context and sends a test message to Sentry."
-)
-def test_sentry_context() -> dict:
-    """
-    Test endpoint that sets user context and sends a test message to Sentry.
-    
-    This endpoint is used for testing purposes only to ensure that user context
-    and additional context are properly captured and reported to Sentry.
-    
-    Returns:
-        dict: Success message
-    """
-    from core.sentry_utils import set_user, set_context, capture_message
-    
-    # Set user context
-    set_user("test-user-123", email="test@example.com", username="testuser")
-    
-    # Set additional context
-    set_context("test_context", {
-        "endpoint": "/test-sentry-context",
-        "purpose": "testing",
-        "timestamp": "2024-01-01T00:00:00Z"
-    })
-    
-    # Send a test message
-    capture_message("Test message with user and context", "info")
-    
-    return {"message": "Test context and message sent to Sentry"}
-
-@get(
-    path="/test-500-error",
-    tags=["Testing"],
-    summary="Test 500 Error Capture",
-    description="Intentionally throws an unhandled exception to test Sentry 500 error capturing."
-)
-def test_500_error() -> dict:
-    """
-    Test endpoint that intentionally throws an unhandled exception to verify
-    that 500 errors are properly captured by Sentry.
-    
-    This endpoint is used for testing purposes only to ensure that unhandled
-    exceptions are properly captured and reported to Sentry.
-    
-    Returns:
-        dict: This should never be reached as an exception is thrown
-        
-    Raises:
-        RuntimeError: Always raised for testing purposes
-    """
-    # Intentionally throw an unhandled exception to test Sentry 500 error capturing
-    raise RuntimeError("This is a test 500 error for Sentry integration testing")
-
-@get(
-    path="/test-simple-error",
-    tags=["Testing"],
-    summary="Test Simple Error",
-    description="Simple test endpoint that raises an error to test exception handling."
-)
-def test_simple_error() -> dict:
-    """
-    Simple test endpoint that raises an error to test exception handling.
-    
-    This endpoint is used for testing purposes only to ensure that exceptions
-    are properly handled and logged.
-    
-    Returns:
-        dict: This should never be reached as an error is thrown
-        
-    Raises:
-        ValueError: Always raised for testing purposes
-    """
-    logger.info("Simple error test endpoint called")
-    print("🔍 DEBUG: Simple error test endpoint called")
-    print("🔍 DEBUG: About to raise ValueError")
-    
-    # Raise a simple error
-    raise ValueError("This is a simple test error")
-    
-    return {"message": "This should never be reached"}
 
 
-@get(
-    path="/test-ping-error",
-    tags=["Testing"],
-    summary="Test Ping Error",
-    description="Test endpoint that intentionally throws a division by zero error for testing error handling."
-)
-def test_ping_error() -> dict:
-    """
-    Test endpoint that intentionally throws a division by zero error for testing.
-    
-    This endpoint is used for testing purposes only to ensure that errors
-    are properly captured and reported to Sentry.
-    
-    Returns:
-        dict: This should never be reached as an error is thrown
-        
-    Raises:
-        ZeroDivisionError: Always raised for testing purposes
-    """
-    logger.info("Test ping error endpoint called")
-    logger.debug("About to trigger division by zero error for testing")
-    
-    if settings.debug:
-        print("🔍 DEBUG: About to trigger division by zero error")
-        print("🔍 DEBUG: This should show detailed error information")
-    
-    try:
-        # Intentionally trigger an error for testing
-        5 / 0
-    except Exception as e:
-        # Explicitly capture the error in Sentry
-        from core.sentry_utils import capture_error
-        print(f"🔍 EXPLICIT ERROR CAPTURE: {type(e).__name__}: {e}")
-        capture_error(e, {
-            "endpoint": "/test-ping-error",
-            "method": "GET",
-            "error_type": "division_by_zero",
-            "capture_method": "explicit"
-        })
-        # Re-raise to trigger the exception handler
-        raise
-    
-    return {"message": "This should never be reached"}
 
 
-@get(
-    path="/test-auth-error",
-    tags=["Testing"],
-    summary="Test Auth Error",
-    description="Test endpoint that simulates authentication errors for testing error handling."
-)
-async def test_auth_error(request: Request) -> dict:
-    """
-    Test endpoint that simulates authentication errors for testing.
-    
-    This endpoint is used for testing purposes only to ensure that authentication
-    errors are properly captured and reported to Sentry.
-    
-    Returns:
-        dict: Success message if authentication works
-        
-    Raises:
-        HTTPException: If authentication fails
-    """
-    logger.info("Test auth error endpoint called")
-    
-    try:
-        # Try to get current user - this will trigger authentication flow
-        from core.dependencies import get_current_user_dependency
-        user = await get_current_user_dependency(request)
-        logger.info(f"Authentication successful for user: {user.id}")
-        return {"message": "Authentication successful", "user_id": str(user.id)}
-    except Exception as e:
-        logger.error(f"Authentication error in test endpoint: {type(e).__name__}: {e}", exc_info=True)
-        # Capture error in Sentry
-        from core.sentry_utils import capture_error
-        capture_error(e, {
-            "endpoint": "/test-auth-error",
-            "method": "GET",
-            "error_type": "auth_test_error",
-            "auth_header": request.headers.get("Authorization", "missing")
-        })
-        raise
 
 
-@get(
-    path="/test-lists-debug",
-    tags=["Testing"],
-    summary="Test Lists Debug",
-    description="Test endpoint to debug lists functionality without authentication."
-)
-async def test_lists_debug() -> dict:
-    """
-    Test endpoint to debug lists functionality without authentication.
-    
-    This endpoint is used for testing purposes only to ensure that the lists
-    service is working properly without authentication issues.
-    
-    Returns:
-        dict: Debug information about lists service
-    """
-    logger.info("Test lists debug endpoint called")
-    
-    try:
-        # Test database connection
-        from db.session import database
-        await database.connect()
-        logger.info("Database connection successful")
-        
-        # Test lists service
-        from apps.todo.services import ListService
-        list_service = ListService(database)
-        logger.info("List service initialized successfully")
-        
-        # Test getting all lists (this might fail without user_id, but we'll catch the error)
-        try:
-            # This will likely fail because we don't have a user_id, but we want to see the error
-            lists = await list_service.get_all_lists("test-user-id")
-            logger.info(f"Retrieved {len(lists)} lists")
-            return {"message": "Lists service working", "lists_count": len(lists)}
-        except Exception as e:
-            logger.warning(f"Expected error in lists service: {type(e).__name__}: {e}")
-            return {"message": "Lists service error (expected)", "error": str(e)}
-            
-    except Exception as e:
-        logger.error(f"Error in test_lists_debug: {type(e).__name__}: {e}", exc_info=True)
-        # Capture error in Sentry
-        from core.sentry_utils import capture_error
-        capture_error(e, {
-            "endpoint": "/test-lists-debug",
-            "method": "GET",
-            "error_type": "lists_debug_error"
-        })
-        return {"message": "Error in lists debug", "error": str(e)}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @get(
@@ -431,47 +215,7 @@ def deployment_info() -> dict:
     """Deployment and operations documentation endpoint."""
     return {"message": "See the documentation tab for deployment instructions."}
 
-@get(
-    path="/test-unhandled-issues",
-    tags=["Testing"],
-    summary="Test Unhandled Issues",
-    description="Test endpoint that demonstrates different types of unhandled issues."
-)
-def test_unhandled_issues() -> dict:
-    """
-    Test endpoint that demonstrates different types of unhandled issues.
-    
-    This endpoint is used for testing purposes only to ensure that different
-    types of unhandled exceptions are properly captured by Sentry.
-    
-    Returns:
-        dict: This should never be reached as an exception is thrown
-        
-    Raises:
-        Various exceptions: For testing different error types
-    """
-    import random
-    
-    # Randomly choose different types of unhandled issues
-    issue_type = random.randint(1, 5)
-    
-    if issue_type == 1:
-        # Type error
-        raise TypeError("This is an unhandled TypeError")
-    elif issue_type == 2:
-        # Attribute error
-        raise AttributeError("This is an unhandled AttributeError")
-    elif issue_type == 3:
-        # Index error
-        raise IndexError("This is an unhandled IndexError")
-    elif issue_type == 4:
-        # Key error
-        raise KeyError("This is an unhandled KeyError")
-    else:
-        # Custom exception
-        raise Exception("This is a generic unhandled exception")
-    
-    return {"message": "This should never be reached"}
+
 
 # Robust CORS configuration
 cors_config = CORSConfig(
@@ -490,17 +234,9 @@ cors_config = CORSConfig(
 
 app = Esmerald(
     routes=[
+        Gateway(handler=root),
         Gateway(handler=ping),
-        Gateway(handler=test_sentry_error),
-        Gateway(handler=test_sentry_message),
-        Gateway(handler=test_sentry_context),
-        Gateway(handler=test_500_error),
-        Gateway(handler=test_simple_error),
-        Gateway(handler=test_ping_error),
-        Gateway(handler=test_auth_error),
-        Gateway(handler=test_lists_debug),
         Gateway(handler=deployment_info),
-        Gateway(handler=test_unhandled_issues),
         # V1 API routes - all under /api/v1/
         Include(routes=v1_routes, path="/api/v1"),
     ],

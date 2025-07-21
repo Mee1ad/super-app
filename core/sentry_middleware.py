@@ -123,8 +123,47 @@ class SentryMiddleware:
             print(f"   Headers: {headers}")
             print("="*80 + "\n")
         
-        # Create a synthetic exception for HTTP errors
-        from core.sentry_utils import capture_message, set_context
+        # Create a proper exception for HTTP errors with full context
+        from core.sentry_utils import capture_error, set_context
+        import traceback
+        
+        # Create a custom exception with detailed information
+        class HTTPError(Exception):
+            def __init__(self, status_code: int, method: str, path: str, headers: dict):
+                self.status_code = status_code
+                self.method = method
+                self.path = path
+                self.headers = headers
+                super().__init__(f"HTTP {status_code} error on {method} {path}")
+        
+        # Create the exception with current stack trace
+        http_error = HTTPError(status_code, method, path, headers)
+        
+        # Add debugging information for 404 errors
+        if status_code == 404:
+            # Get available routes for debugging
+            try:
+                from main import app
+                available_routes = []
+                for route in app.routes:
+                    if hasattr(route, 'path'):
+                        available_routes.append(route.path)
+                    elif hasattr(route, 'routes'):
+                        # Handle nested routes
+                        for nested_route in route.routes:
+                            if hasattr(nested_route, 'path'):
+                                available_routes.append(f"{route.path}{nested_route.path}")
+                
+                # Add route debugging info to context
+                set_context("debug_404", {
+                    "requested_path": path,
+                    "requested_method": method,
+                    "available_routes": available_routes,
+                    "suggestion": "Check if the endpoint exists or if authentication is required"
+                })
+            except Exception as e:
+                # If we can't get routes, just log the error
+                logger.warning(f"Could not get available routes for 404 debugging: {e}")
         
         # Set context for Sentry
         set_context("request", {
@@ -138,8 +177,17 @@ class SentryMiddleware:
             "method": method,
             "status_code": status_code,
             "middleware": "SentryMiddleware",
+            "error_type": "http_error",
+            "response_body": message.get("body", b"").decode("utf-8", errors="ignore") if message.get("body") else None
+        })
+        
+        # Capture the exception with full stack trace
+        capture_error(http_error, {
+            "endpoint": path,
+            "method": method,
+            "status_code": status_code,
+            "middleware": "SentryMiddleware",
             "error_type": "http_error"
         })
-        capture_message(f"HTTP {status_code} error on {method} {path}", "error")
         
-        logger.error(f"HTTP {status_code} error captured by Sentry middleware: {method} {path}") 
+        logger.error(f"HTTP {status_code} error captured by Sentry middleware: {method} {path}", exc_info=True) 
