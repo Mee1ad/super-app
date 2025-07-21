@@ -43,6 +43,35 @@ def before_send_filter(event, hint):
         print("   ❌ Transaction event filtered out")
         return None
     
+    # Filter out framework-level 404 errors (very common and not actionable)
+    if event.get("type") == "error":
+        exception = event.get("exception", {})
+        if exception and isinstance(exception, dict):
+            values = exception.get("values", [])
+            for value in values:
+                if isinstance(value, dict):
+                    # Filter out Lilya/Esmerald framework 404s
+                    if (value.get("type") == "HTTPException" and 
+                        value.get("value") == "Not Found" and
+                        "lilya.routing" in str(value.get("stacktrace", {}).get("frames", []))):
+                        print("   ❌ Framework 404 error filtered out")
+                        logger.debug("Framework 404 error filtered out")
+                        return None
+                    
+                    # Filter out common framework-level 404s
+                    if (value.get("type") == "HTTPException" and 
+                        value.get("value") == "Not Found"):
+                        # Check if it's from framework routing
+                        stacktrace = value.get("stacktrace", {})
+                        frames = stacktrace.get("frames", [])
+                        framework_modules = ["lilya.routing", "esmerald.routing", "starlette.routing"]
+                        
+                        for frame in frames:
+                            if any(module in str(frame.get("module", "")) for module in framework_modules):
+                                print("   ❌ Framework routing 404 filtered out")
+                                logger.debug("Framework routing 404 filtered out")
+                                return None
+    
     print("   ✅ Sentry event allowed to be sent")
     logger.debug("Sentry event allowed to be sent")
     return event
@@ -120,13 +149,4 @@ def init_sentry():
     )
     
     logger.info(f"Sentry initialized successfully for environment: {environment}")
-    print(f"Sentry initialized for environment: {environment}")
-    
-    # Test Sentry connection
-    try:
-        sentry_sdk.capture_message("Sentry connection test message", level="info")
-        logger.info("Sentry connection test message sent successfully")
-        print("✅ Sentry connection test message sent successfully")
-    except Exception as e:
-        logger.error(f"Failed to send Sentry test message: {e}")
-        print(f"❌ Failed to send Sentry test message: {e}") 
+    print(f"Sentry initialized for environment: {environment}") 

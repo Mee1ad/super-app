@@ -96,11 +96,21 @@ class SentryMiddleware:
             "headers": headers,
         })
         
-        # Capture the exception in Sentry
+        # Add endpoint-specific context
+        set_context("endpoint_error", {
+            "endpoint": path,
+            "method": method,
+            "error_type": type(exc).__name__,
+            "middleware": "SentryMiddleware",
+            "suggestion": "Check endpoint implementation, database connections, and external service dependencies"
+        })
+        
+        # Capture the exception in Sentry with enhanced context
         capture_error(exc, {
             "endpoint": path,
             "method": method,
-            "middleware": "SentryMiddleware"
+            "middleware": "SentryMiddleware",
+            "error_category": "application_error"
         })
         
         logger.error(f"Error captured by Sentry middleware: {exc}", exc_info=True)
@@ -127,6 +137,53 @@ class SentryMiddleware:
         from core.sentry_utils import capture_error, set_context
         import traceback
         
+        # Create descriptive error titles based on status code and path
+        def get_error_title(status_code: int, method: str, path: str) -> str:
+            """Generate descriptive error titles for Sentry"""
+            
+            # Common error patterns
+            if status_code == 404:
+                if path.startswith('/.git/'):
+                    return f"Git Repository Access Attempt: {method} {path}"
+                elif path.startswith('/api/'):
+                    return f"Missing API Endpoint: {method} {path}"
+                elif path.startswith('/admin/'):
+                    return f"Admin Panel Access Attempt: {method} {path}"
+                elif path.startswith('/wp-'):
+                    return f"WordPress Scanner Detected: {method} {path}"
+                elif path.startswith('/php'):
+                    return f"PHP Scanner Detected: {method} {path}"
+                elif path.startswith('/.env'):
+                    return f"Environment File Access Attempt: {method} {path}"
+                elif path.startswith('/config/'):
+                    return f"Configuration Access Attempt: {method} {path}"
+                else:
+                    return f"Resource Not Found: {method} {path}"
+            
+            elif status_code == 422:
+                return f"Validation Error: {method} {path}"
+            
+            elif status_code == 401:
+                return f"Authentication Required: {method} {path}"
+            
+            elif status_code == 403:
+                return f"Access Forbidden: {method} {path}"
+            
+            elif status_code == 500:
+                return f"Internal Server Error: {method} {path}"
+            
+            elif status_code == 502:
+                return f"Bad Gateway: {method} {path}"
+            
+            elif status_code == 503:
+                return f"Service Unavailable: {method} {path}"
+            
+            elif status_code == 429:
+                return f"Rate Limit Exceeded: {method} {path}"
+            
+            else:
+                return f"HTTP {status_code} Error: {method} {path}"
+        
         # Create a custom exception with detailed information
         class HTTPError(Exception):
             def __init__(self, status_code: int, method: str, path: str, headers: dict):
@@ -134,7 +191,8 @@ class SentryMiddleware:
                 self.method = method
                 self.path = path
                 self.headers = headers
-                super().__init__(f"HTTP {status_code} error on {method} {path}")
+                self.title = get_error_title(status_code, method, path)
+                super().__init__(self.title)
         
         # Create the exception
         http_error = HTTPError(status_code, method, path, headers)
@@ -147,6 +205,11 @@ class SentryMiddleware:
         
         # Filter out common 404 errors that are expected and not actionable
         if status_code == 404:
+            # Debug logging for 404 filtering
+            if settings.debug:
+                print(f"🔍 Checking 404 filter for: {method} {path}")
+                print(f"   Path length: {len(path)}")
+                print(f"   Path starts with '/.env': {path.lower().startswith('/.env')}")
             common_404_paths = [
                 '/favicon.ico',
                 '/robots.txt',
@@ -160,12 +223,30 @@ class SentryMiddleware:
                 '/.well-known/webfinger',
                 '/humans.txt',
                 '/crossdomain.xml',
-                '/clientaccesspolicy.xml'
+                '/clientaccesspolicy.xml',
+                '/.git/',
+                '/.gitignore',
+                '/.env',
+                '/wp-',
+                '/php',
+                '/admin/',
+                '/config/',
+                '/backup/',
+                '/old/',
+                '/test/',
+                '/tmp/',
+                '/temp/'
             ]
             
             # Check if this is a common 404 path
-            if any(path.lower().startswith(common_path.lower()) for common_path in common_404_paths):
-                logger.debug(f"Common 404 ignored: {method} {path}")
+            for common_path in common_404_paths:
+                if path.lower().startswith(common_path.lower()):
+                    logger.debug(f"Common 404 ignored: {method} {path} (matches {common_path})")
+                    return
+            
+            # Additional check for exact matches and common patterns
+            if path.lower() in ['/.env', '/.git', '/.gitignore', '/robots.txt', '/favicon.ico']:
+                logger.debug(f"Common 404 ignored (exact match): {method} {path}")
                 return
         
         # Add debugging information for specific error codes
