@@ -4,26 +4,23 @@ from uuid import UUID
 
 from edgy import Model, fields, Manager
 
-from db.base import BaseModel, utc_now
+from db.base import UUIDBaseModel, utc_now
 from db.session import models_registry
 
 
-class Category(BaseModel):
+class Category(UUIDBaseModel):
     """Category model for organizing ideas"""
     objects: ClassVar[Manager] = Manager()
     
-    id = fields.CharField(primary_key=True, max_length=50)
     name = fields.CharField(max_length=255)
     emoji = fields.CharField(max_length=10)
-    created_at = fields.DateTimeField(default=utc_now)
-    updated_at = fields.DateTimeField(default=utc_now, auto_now=True)
 
     class Meta:
         tablename = "categories"
         registry = models_registry
 
 
-class Idea(BaseModel):
+class Idea(UUIDBaseModel):
     """Idea model for storing user ideas"""
     objects: ClassVar[Manager] = Manager()
     

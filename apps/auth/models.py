@@ -2,11 +2,11 @@ from typing import Optional, ClassVar
 from datetime import datetime
 from edgy import Model, fields, Manager
 
-from db.base import BaseModel
+from db.base import UUIDBaseModel
 from db.session import models_registry
 
 
-class Role(BaseModel):
+class Role(UUIDBaseModel):
     """Model for user roles"""
     objects: ClassVar[Manager] = Manager()
     
@@ -19,7 +19,7 @@ class Role(BaseModel):
         registry = models_registry
 
 
-class User(BaseModel):
+class User(UUIDBaseModel):
     """User model with role-based access control"""
     objects: ClassVar[Manager] = Manager()
     

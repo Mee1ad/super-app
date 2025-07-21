@@ -2,10 +2,10 @@ from typing import Optional, ClassVar
 from uuid import UUID
 from datetime import date
 from edgy import Model, fields, Manager
-from db.base import BaseModel, utc_now
+from db.base import UUIDBaseModel, utc_now
 from db.session import models_registry
 
-class Mood(BaseModel):
+class Mood(UUIDBaseModel):
     objects: ClassVar[Manager] = Manager()
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
@@ -15,7 +15,7 @@ class Mood(BaseModel):
         tablename = "moods"
         registry = models_registry
 
-class DiaryEntry(BaseModel):
+class DiaryEntry(UUIDBaseModel):
     objects: ClassVar[Manager] = Manager()
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="diary_entries")
     mood = fields.ForeignKey("Mood", on_delete="SET NULL", null=True, related_name="diary_entries")

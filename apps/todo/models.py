@@ -4,7 +4,7 @@ from enum import Enum
 
 from edgy import Model, fields, Manager
 
-from db.base import BaseModel
+from db.base import UUIDBaseModel
 from db.session import models_registry
 
 
@@ -19,7 +19,7 @@ class Variant(str, Enum):
     FILLED = "filled"
 
 
-class List(BaseModel):
+class List(UUIDBaseModel):
     """List model for organizing tasks and shopping items"""
     objects: ClassVar[Manager] = Manager()
     
@@ -40,7 +40,7 @@ class List(BaseModel):
         registry = models_registry
 
 
-class Task(BaseModel):
+class Task(UUIDBaseModel):
     """Task model for todo items"""
     objects: ClassVar[Manager] = Manager()
     
@@ -65,7 +65,7 @@ class Task(BaseModel):
         registry = models_registry
 
 
-class ShoppingItem(BaseModel):
+class ShoppingItem(UUIDBaseModel):
     """Shopping item model for shopping lists"""
     objects: ClassVar[Manager] = Manager()
     

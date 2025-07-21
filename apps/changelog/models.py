@@ -4,7 +4,7 @@ from datetime import datetime
 
 from edgy import Model, fields, Manager
 
-from db.base import BaseModel
+from db.base import UUIDBaseModel
 from db.session import models_registry
 
 
@@ -18,7 +18,7 @@ class ChangeType(str, Enum):
     SECURITY = "security"
 
 
-class ChangelogEntry(BaseModel):
+class ChangelogEntry(UUIDBaseModel):
     """Model for storing changelog entries"""
     objects: ClassVar[Manager] = Manager()
     
@@ -43,7 +43,7 @@ class ChangelogEntry(BaseModel):
         registry = models_registry
 
 
-class ChangelogView(BaseModel):
+class ChangelogView(UUIDBaseModel):
     """Model for tracking user views of changelog entries using IP + User-Agent"""
     objects: ClassVar[Manager] = Manager()
     
@@ -65,7 +65,7 @@ class ChangelogView(BaseModel):
         registry = models_registry
 
 
-class LastProcessedCommit(BaseModel):
+class LastProcessedCommit(UUIDBaseModel):
     """Model for tracking the last processed git commit"""
     objects: ClassVar[Manager] = Manager()
     

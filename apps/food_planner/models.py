@@ -1,10 +1,10 @@
 from typing import Optional, ClassVar
 from uuid import UUID
 from edgy import Model, fields, Manager
-from db.base import BaseModel, utc_now
+from db.base import UUIDBaseModel, utc_now
 from db.session import models_registry
 
-class MealType(BaseModel):
+class MealType(UUIDBaseModel):
     objects: ClassVar[Manager] = Manager()
     name = fields.CharField(max_length=100)
     emoji = fields.CharField(max_length=10)
@@ -14,7 +14,7 @@ class MealType(BaseModel):
         tablename = "meal_types"
         registry = models_registry
 
-class FoodEntry(BaseModel):
+class FoodEntry(UUIDBaseModel):
     objects: ClassVar[Manager] = Manager()
     user_id = fields.ForeignKey("User", on_delete="cascade", related_name="food_entries")
     meal_type = fields.ForeignKey("MealType", on_delete="SET NULL", null=True, related_name="food_entries")
