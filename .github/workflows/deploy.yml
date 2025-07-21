@@ -165,10 +165,6 @@ jobs:
               fi
             done
             
-            # Alternative: Use the migration script if the above fails
-            # echo "Trying alternative migration approach..."
-            # docker compose exec -T api ./scripts/run-migrations.sh
-            
             # Final health check
             sleep 3
             for i in {1..5}; do

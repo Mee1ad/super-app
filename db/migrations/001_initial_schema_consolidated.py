@@ -50,14 +50,21 @@ class InitialSchemaConsolidatedMigration(Migration):
         # Seed default roles
         logger.info("🔄 Seeding default roles...")
         for role_name, role_data in DEFAULT_ROLES.items():
-            await self.database.execute("""
-                INSERT INTO roles (name, description, permissions)
-                VALUES (:name, :description, CAST(:permissions AS json))
-            """, {
-                "name": role_name,
-                "description": role_data["description"],
-                "permissions": json.dumps(role_data["permissions"])
-            })
+            # Check if role already exists
+            existing_role = await self.database.fetch_one(
+                "SELECT id FROM roles WHERE name = :name",
+                {"name": role_name}
+            )
+            
+            if not existing_role:
+                await self.database.execute("""
+                    INSERT INTO roles (id, name, description, permissions, created_at, updated_at)
+                    VALUES ({uuid_func}, :name, :description, CAST(:permissions AS json), {timestamp_default}, {timestamp_default})
+                """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {
+                    "name": role_name,
+                    "description": role_data["description"],
+                    "permissions": json.dumps(role_data["permissions"])
+                })
         logger.info("✅ Default roles seeded")
         
         # Seed initial moods
@@ -74,47 +81,68 @@ class InitialSchemaConsolidatedMigration(Migration):
         ]
         
         for name, emoji, color in moods_data:
-            await self.database.execute("""
-                INSERT INTO moods (name, emoji, color)
-                VALUES (:name, :emoji, :color)
-            """, {"name": name, "emoji": emoji, "color": color})
+            # Check if mood already exists
+            existing_mood = await self.database.fetch_one(
+                "SELECT id FROM moods WHERE name = :name",
+                {"name": name}
+            )
+            
+            if not existing_mood:
+                await self.database.execute("""
+                    INSERT INTO moods (id, name, emoji, color, created_at, updated_at)
+                    VALUES ({uuid_func}, :name, :emoji, :color, {timestamp_default}, {timestamp_default})
+                """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {"name": name, "emoji": emoji, "color": color})
         logger.info("✅ Initial moods seeded")
         
         # Seed meal types
         logger.info("🔄 Seeding meal types...")
         meal_types = [
-            ("Breakfast", "🌅", "#F59E0B"),
-            ("Lunch", "☀️", "#10B981"),
-            ("Dinner", "🌙", "#8B5CF6"),
-            ("Snack", "🍎", "#EF4444"),
-            ("Dessert", "🍰", "#EC4899")
+            ("Breakfast", "🌅", "08:00"),
+            ("Lunch", "☀️", "12:00"),
+            ("Dinner", "🌙", "18:00"),
+            ("Snack", "🍎", "15:00"),
+            ("Dessert", "🍰", "20:00")
         ]
         
-        for name, emoji, color in meal_types:
-            await self.database.execute("""
-                INSERT INTO meal_types (name, emoji, color)
-                VALUES (:name, :emoji, :color)
-            """, {"name": name, "emoji": emoji, "color": color})
+        for name, emoji, time in meal_types:
+            # Check if meal type already exists
+            existing_meal_type = await self.database.fetch_one(
+                "SELECT id FROM meal_types WHERE name = :name",
+                {"name": name}
+            )
+            
+            if not existing_meal_type:
+                await self.database.execute("""
+                    INSERT INTO meal_types (id, name, emoji, time, created_at, updated_at)
+                    VALUES ({uuid_func}, :name, :emoji, :time, {timestamp_default}, {timestamp_default})
+                """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {"name": name, "emoji": emoji, "time": time})
         logger.info("✅ Meal types seeded")
         
         # Seed default categories for ideas
         logger.info("🔄 Seeding default categories...")
         categories = [
-            ("Personal", "👤", "#10B981"),
-            ("Work", "💼", "#3B82F6"),
-            ("Health", "🏥", "#EF4444"),
-            ("Learning", "📚", "#8B5CF6"),
-            ("Travel", "✈️", "#F59E0B"),
-            ("Technology", "💻", "#6B7280"),
-            ("Creative", "🎨", "#EC4899"),
-            ("Finance", "💰", "#84CC16")
+            ("Personal", "👤"),
+            ("Work", "💼"),
+            ("Health", "🏥"),
+            ("Learning", "📚"),
+            ("Travel", "✈️"),
+            ("Technology", "💻"),
+            ("Creative", "🎨"),
+            ("Finance", "💰")
         ]
         
-        for name, emoji, color in categories:
-            await self.database.execute("""
-                INSERT INTO categories (name, emoji, color)
-                VALUES (:name, :emoji, :color)
-            """, {"name": name, "emoji": emoji, "color": color})
+        for name, emoji in categories:
+            # Check if category already exists
+            existing_category = await self.database.fetch_one(
+                "SELECT id FROM categories WHERE name = :name",
+                {"name": name}
+            )
+            
+            if not existing_category:
+                await self.database.execute("""
+                    INSERT INTO categories (id, name, emoji, created_at, updated_at)
+                    VALUES ({uuid_func}, :name, :emoji, {timestamp_default}, {timestamp_default})
+                """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {"name": name, "emoji": emoji})
         logger.info("✅ Default categories seeded")
         
         # Create default admin user if not exists
@@ -133,9 +161,9 @@ class InitialSchemaConsolidatedMigration(Migration):
             
             if admin_role:
                 await self.database.execute("""
-                    INSERT INTO users (email, username, hashed_password, is_active, is_superuser, role)
-                    VALUES (:email, :username, :hashed_password, :is_active, :is_superuser, :role)
-                """, {
+                    INSERT INTO users (id, email, username, hashed_password, is_active, is_superuser, role, created_at, updated_at)
+                    VALUES ({uuid_func}, :email, :username, :hashed_password, :is_active, :is_superuser, :role, {timestamp_default}, {timestamp_default})
+                """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {
                     "email": "admin@superapp.com",
                     "username": "admin",
                     "hashed_password": "hashed_password_placeholder",  # Should be properly hashed in production

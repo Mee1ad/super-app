@@ -34,7 +34,7 @@ class User(UUIDBaseModel):
     hashed_password = fields.CharField(max_length=255)
     is_active = fields.BooleanField(default=True)
     is_superuser = fields.BooleanField(default=False)
-    role = fields.ForeignKey("Role", on_delete="SET NULL", null=True, related_name="users")
+    role = fields.ForeignKey(Role, on_delete="SET NULL", null=True, related_name="users")
     created_at = fields.DateTimeField(auto_now_add=True)
     updated_at = fields.DateTimeField(auto_now=True)
     
