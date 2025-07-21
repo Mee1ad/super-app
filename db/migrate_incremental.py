@@ -37,15 +37,7 @@ def register_migrations():
         import importlib.util
         
         migration_files = [
-            "db/migrations/001_initial_schema.py",
-            "db/migrations/002_add_user_authentication.py", 
-            "db/migrations/003_add_changelog_publishing.py",
-            "db/migrations/004_seed_default_roles.py",
-            "db/migrations/005_seed_initial_data.py",
-            "db/migrations/006_add_anonymous_changelog_views.py",
-            "db/migrations/007_unified_changelog_tracking.py",
-            "db/migrations/008_add_user_id_to_tables.py",
-            "db/migrations/009_fix_food_entries_schema.py"
+            "db/migrations/001_initial_schema_consolidated.py"
         ]
         
         for migration_file in migration_files:
@@ -128,18 +120,18 @@ async def show_status():
         status = await migration_manager.status()
         
         print("\n=== Migration Status ===")
-        print(f"Total migrations: {status['total']}")
-        print(f"Applied: {status['applied_count']}")
-        print(f"Pending: {status['pending_count']}")
+        print(f"Total migrations: {status['total_migrations']}")
+        print(f"Applied: {status['applied_migrations']}")
+        print(f"Pending: {len(status['pending_migrations'])}")
         
-        if status['applied']:
+        if status['applied_migrations_list']:
             print(f"\nApplied migrations:")
-            for version in status['applied']:
-                print(f"  ✅ {version}")
+            for migration in status['applied_migrations_list']:
+                print(f"  ✅ {migration['version']}: {migration['name']}")
         
-        if status['pending']:
+        if status['pending_migrations']:
             print(f"\nPending migrations:")
-            for migration in status['pending']:
+            for migration in status['pending_migrations']:
                 print(f"  ⏳ {migration['version']}: {migration['name']}")
                 print(f"     Description: {migration['description']}")
                 if migration['dependencies']:
