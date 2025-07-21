@@ -28,7 +28,7 @@ class AddUserIdToTablesMigration(Migration):
         if not lists_has_user_id:
             await database.execute("""
                 ALTER TABLE lists 
-                ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+                ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
             """)
             print("✅ Added user_id column to lists table")
         
@@ -37,7 +37,7 @@ class AddUserIdToTablesMigration(Migration):
         if not tasks_has_user_id:
             await database.execute("""
                 ALTER TABLE tasks 
-                ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+                ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
             """)
             print("✅ Added user_id column to tasks table")
         
@@ -46,7 +46,7 @@ class AddUserIdToTablesMigration(Migration):
         if not shopping_items_has_user_id:
             await database.execute("""
                 ALTER TABLE shopping_items 
-                ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+                ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
             """)
             print("✅ Added user_id column to shopping_items table")
         
@@ -55,7 +55,7 @@ class AddUserIdToTablesMigration(Migration):
         if not diary_entries_has_user_id:
             await database.execute("""
                 ALTER TABLE diary_entries 
-                ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+                ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
             """)
             print("✅ Added user_id column to diary_entries table")
         
@@ -64,7 +64,7 @@ class AddUserIdToTablesMigration(Migration):
         if not food_entries_has_user_id:
             await database.execute("""
                 ALTER TABLE food_entries 
-                ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+                ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
             """)
             print("✅ Added user_id column to food_entries table")
         
@@ -73,7 +73,7 @@ class AddUserIdToTablesMigration(Migration):
         if not ideas_has_user_id:
             await database.execute("""
                 ALTER TABLE ideas 
-                ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+                ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE
             """)
             print("✅ Added user_id column to ideas table")
         
