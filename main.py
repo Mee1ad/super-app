@@ -1,4 +1,4 @@
-from esmerald import Esmerald, Gateway, get, CORSConfig, Include
+from esmerald import Esmerald, Gateway, get, CORSConfig, Include, Request
 from core.config import settings
 from core.sentry import init_sentry
 from core.exceptions import sentry_exception_handler

@@ -38,9 +38,13 @@ class TestSentryExceptionHandler:
     
     @patch('core.exceptions.capture_error')
     @patch('core.exceptions.set_context')
+    @patch('core.exceptions.settings')
     @pytest.mark.asyncio
-    async def test_handler_captures_generic_exception(self, mock_set_context, mock_capture_error, handler, mock_request):
+    async def test_handler_captures_generic_exception(self, mock_settings, mock_set_context, mock_capture_error, handler, mock_request):
         """Test that generic exceptions are captured and return 500"""
+        # Mock settings to return debug=False for this test
+        mock_settings.debug = False
+        
         exc = Exception("Test error")
         response = await handler(mock_request, exc)
         # Verify Sentry was called
