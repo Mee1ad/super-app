@@ -157,12 +157,16 @@ project/
 
 ### Commit Messages
 
+* **Make small commits with clear messages**
 * Use short and concise words
 * Keep commit messages under 50 characters for the subject line
 * Use imperative mood ("add feature" not "added feature")
 * Start with lowercase letters
 * Use present tense
 * Examples: "fix auth bug", "add user validation", "update docs"
+* **Each commit should represent a single logical change**
+* **Break large changes into multiple smaller commits**
+* **Use descriptive commit messages that explain the "why" not just the "what"**
 
 ---
 

@@ -139,8 +139,38 @@ class SentryMiddleware:
         # Create the exception
         http_error = HTTPError(status_code, method, path, headers)
         
+        # Filter out common HTTP errors that don't need Sentry tracking
+        if status_code in [405, 406, 415, 416, 418]:
+            # These are client errors that are common and not actionable
+            logger.debug(f"HTTP {status_code} ignored: {method} {path}")
+            return
+        
+        # Filter out common 404 errors that are expected and not actionable
+        if status_code == 404:
+            common_404_paths = [
+                '/favicon.ico',
+                '/robots.txt',
+                '/apple-touch-icon.png',
+                '/apple-touch-icon-precomposed.png',
+                '/manifest.json',
+                '/service-worker.js',
+                '/sitemap.xml',
+                '/.well-known/security.txt',
+                '/.well-known/host-meta',
+                '/.well-known/webfinger',
+                '/humans.txt',
+                '/crossdomain.xml',
+                '/clientaccesspolicy.xml'
+            ]
+            
+            # Check if this is a common 404 path
+            if any(path.lower().startswith(common_path.lower()) for common_path in common_404_paths):
+                logger.debug(f"Common 404 ignored: {method} {path}")
+                return
+        
         # Add debugging information for specific error codes
         if status_code == 404:
+            # This is an actionable 404 (not filtered out above)
             # Get available routes for debugging
             try:
                 from main import app
@@ -159,7 +189,8 @@ class SentryMiddleware:
                     "requested_path": path,
                     "requested_method": method,
                     "available_routes": available_routes,
-                    "suggestion": "Check if the endpoint exists or if authentication is required"
+                    "suggestion": "This is an actionable 404 error. Check if the endpoint exists or if authentication is required.",
+                    "note": "Common 404s (favicon.ico, robots.txt, etc.) are automatically filtered out."
                 })
             except Exception as e:
                 # If we can't get routes, just log the error

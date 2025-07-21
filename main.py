@@ -1,4 +1,4 @@
-from esmerald import Esmerald, Gateway, get, CORSConfig, Include, Request
+from esmerald import Esmerald, Gateway, get, CORSConfig, Include, Request, options
 from core.config import settings
 from core.sentry import init_sentry
 from core.exceptions import sentry_exception_handler
@@ -74,6 +74,22 @@ def root() -> dict:
         },
         "timestamp": datetime.now().isoformat()
     }
+
+
+@options(
+    path="/",
+    tags=["Root"],
+    summary="CORS Preflight for Root",
+    description="Handle CORS preflight requests for the root endpoint."
+)
+def root_options() -> dict:
+    """
+    Handle CORS preflight requests for the root endpoint.
+    
+    Returns:
+        dict: Empty response for CORS preflight
+    """
+    return {}
 
 
 @get(
@@ -235,6 +251,7 @@ cors_config = CORSConfig(
 app = Esmerald(
     routes=[
         Gateway(handler=root),
+        Gateway(handler=root_options),
         Gateway(handler=ping),
         Gateway(handler=deployment_info),
         # V1 API routes - all under /api/v1/

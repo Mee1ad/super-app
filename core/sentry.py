@@ -21,7 +21,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 def before_send_filter(event, hint):
-    print('decidninignignggggggggggggggggggggggggggggggg')
     """Filter events before sending to Sentry"""
     
     # Get environment and debug settings from settings object
@@ -33,11 +32,11 @@ def before_send_filter(event, hint):
     print(f"   Debug mode: {debug_mode}")
     print(f"   Event type: {event.get('type', 'unknown')}")
     
-    # In development, allow all events to be sent
+    # In development, block all events from being sent to Sentry
     if environment == "development":
-        print("   ✅ Sentry event allowed to be sent")
-        logger.debug("Sentry event allowed to be sent")
-        return event
+        print("   ❌ Development environment: Sentry event blocked")
+        logger.debug("Sentry event blocked in development environment")
+        return None
     
     # In production, filter out certain events
     if event.get("type") == "transaction":
@@ -53,6 +52,10 @@ def before_breadcrumb_filter(breadcrumb, hint):
     
     # Filter out certain breadcrumbs in production
     environment = settings.sentry_environment
+    
+    # In development, block all breadcrumbs
+    if environment == "development":
+        return None
     
     if environment == "production":
         # Filter out database queries in production
