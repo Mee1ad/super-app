@@ -65,28 +65,6 @@ def ping() -> dict:
         dict: Health status with message and timestamp
     """
     logger.info("Health check endpoint called")
-    logger.debug("About to trigger division by zero error for testing")
-    
-    if settings.debug:
-        print("🔍 DEBUG: About to trigger division by zero error")
-        print("🔍 DEBUG: This should show detailed error information")
-    
-    try:
-        # Intentionally trigger an error for testing
-        5 / 0
-    except Exception as e:
-        # Explicitly capture the error in Sentry
-        from core.sentry_utils import capture_error
-        print(f"🔍 EXPLICIT ERROR CAPTURE: {type(e).__name__}: {e}")
-        capture_error(e, {
-            "endpoint": "/ping",
-            "method": "GET",
-            "error_type": "division_by_zero",
-            "capture_method": "explicit"
-        })
-        # Re-raise to trigger the exception handler
-        raise
-    
     return {"message": "pong", "status": "healthy"}
 
 @get(
@@ -215,6 +193,52 @@ def test_simple_error() -> dict:
     raise ValueError("This is a simple test error")
     
     return {"message": "This should never be reached"}
+
+
+@get(
+    path="/test-ping-error",
+    tags=["Testing"],
+    summary="Test Ping Error",
+    description="Test endpoint that intentionally throws a division by zero error for testing error handling."
+)
+def test_ping_error() -> dict:
+    """
+    Test endpoint that intentionally throws a division by zero error for testing.
+    
+    This endpoint is used for testing purposes only to ensure that errors
+    are properly captured and reported to Sentry.
+    
+    Returns:
+        dict: This should never be reached as an error is thrown
+        
+    Raises:
+        ZeroDivisionError: Always raised for testing purposes
+    """
+    logger.info("Test ping error endpoint called")
+    logger.debug("About to trigger division by zero error for testing")
+    
+    if settings.debug:
+        print("🔍 DEBUG: About to trigger division by zero error")
+        print("🔍 DEBUG: This should show detailed error information")
+    
+    try:
+        # Intentionally trigger an error for testing
+        5 / 0
+    except Exception as e:
+        # Explicitly capture the error in Sentry
+        from core.sentry_utils import capture_error
+        print(f"🔍 EXPLICIT ERROR CAPTURE: {type(e).__name__}: {e}")
+        capture_error(e, {
+            "endpoint": "/test-ping-error",
+            "method": "GET",
+            "error_type": "division_by_zero",
+            "capture_method": "explicit"
+        })
+        # Re-raise to trigger the exception handler
+        raise
+    
+    return {"message": "This should never be reached"}
+
 
 @get(
     path="/deployment",
@@ -381,6 +405,7 @@ app = Esmerald(
         Gateway(handler=test_sentry_context),
         Gateway(handler=test_500_error),
         Gateway(handler=test_simple_error),
+        Gateway(handler=test_ping_error),
         Gateway(handler=deployment_info),
         Gateway(handler=test_unhandled_issues),
         # V1 API routes - all under /api/v1/
