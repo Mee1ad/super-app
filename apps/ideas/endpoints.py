@@ -53,7 +53,7 @@ async def get_categories() -> CategoriesResponse:
 async def get_ideas(
     request: Request,
     search: Optional[str] = Query(default=None, description="Optional search term to filter ideas by title"),
-    category: Optional[str] = Query(default=None, description="Optional category ID to filter ideas"),
+    category: Optional[UUID] = Query(default=None, description="Optional category ID to filter ideas"),
     page: int = Query(default=1, description="Page number for pagination (default: 1)"),
     limit: int = Query(default=20, description="Number of ideas per page (default: 20, max: 100)")
 ) -> IdeasResponse:

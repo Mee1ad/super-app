@@ -21,7 +21,7 @@ class CategoryService:
         """Get all categories ordered by name"""
         return await Category.query.all().order_by("name")
     
-    async def get_category_by_id(self, category_id: str) -> Category:
+    async def get_category_by_id(self, category_id: UUID) -> Category:
         """Get a category by ID"""
         category = await Category.query.get(id=category_id)
         if not category:
@@ -32,13 +32,13 @@ class CategoryService:
         """Create a new category"""
         return await Category.query.create(**category_data.model_dump())
     
-    async def update_category(self, category_id: str, category_data: CategoryUpdate) -> Category:
+    async def update_category(self, category_id: UUID, category_data: CategoryUpdate) -> Category:
         """Update a category"""
         category = await self.get_category_by_id(category_id)
         update_data = {k: v for k, v in category_data.model_dump().items() if v is not None}
         return await category.update(**update_data)
     
-    async def delete_category(self, category_id: str) -> bool:
+    async def delete_category(self, category_id: UUID) -> bool:
         """Delete a category"""
         category = await self.get_category_by_id(category_id)
         await category.delete()
@@ -55,7 +55,7 @@ class IdeaService:
         self, 
         user_id: UUID,
         search: Optional[str] = None, 
-        category: Optional[str] = None,
+        category: Optional[UUID] = None,
         page: int = 1,
         limit: int = 20
     ) -> dict:

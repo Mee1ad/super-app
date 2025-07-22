@@ -14,7 +14,7 @@ class CategoryBase(BaseModel):
 
 
 class CategoryCreate(CategoryBase):
-    id: str = Field(..., min_length=1, max_length=50, description="Unique identifier for the category")
+    id: UUID = Field(..., description="Unique identifier for the category")
     model_config = ConfigDict()
 
 
@@ -25,7 +25,7 @@ class CategoryUpdate(BaseModel):
 
 
 class CategoryResponse(CategoryBase):
-    id: str = Field(..., description="Unique identifier for the category")
+    id: UUID = Field(..., description="Unique identifier for the category")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -36,7 +36,7 @@ class CategoryResponse(CategoryBase):
 class IdeaBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Title of the idea")
     description: Optional[str] = Field(None, description="Optional description of the idea")
-    category: str = Field(..., description="Category ID for the idea")
+    category: UUID = Field(..., description="Category ID for the idea")
     tags: List[str] = Field(default_factory=list, description="List of tags for the idea")
     model_config = ConfigDict()
 
@@ -48,7 +48,7 @@ class IdeaCreate(IdeaBase):
 class IdeaUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255, description="New title for the idea")
     description: Optional[str] = Field(None, description="New description for the idea")
-    category: Optional[str] = Field(None, description="New category ID for the idea")
+    category: Optional[UUID] = Field(None, description="New category ID for the idea")
     tags: Optional[List[str]] = Field(None, description="New tags for the idea")
     model_config = ConfigDict()
     
@@ -90,7 +90,7 @@ class IdeaUpdate(BaseModel):
 class IdeaResponse(IdeaBase):
     id: UUID = Field(..., description="Unique identifier for the idea")
     user_id: UUID = Field(..., description="ID of the user who owns the idea")
-    category_id: Optional[str] = Field(None, description="ID of the category")
+    category_id: Optional[UUID] = Field(None, description="ID of the category")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
