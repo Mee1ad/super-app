@@ -19,7 +19,7 @@ class MoodResponse(MoodBase):
 class DiaryEntryBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(...)
-    mood: str = Field(..., description="Mood ID for the entry")
+    mood: Optional[UUID] = Field(None, description="Mood ID for the entry")
     date: Optional[date_type] = Field(None, description="Date for the diary entry")
     images: List[str] = Field(default_factory=list)
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -30,7 +30,7 @@ class DiaryEntryCreate(DiaryEntryBase):
 class DiaryEntryUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = Field(None)
-    mood: Optional[str] = Field(None)
+    mood: Optional[UUID] = Field(None)
     date: Optional[date_type] = Field(None, description="Date for the diary entry")
     images: Optional[List[str]] = Field(None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -52,14 +52,16 @@ class DiaryEntryResponse(DiaryEntryBase):
                 elif hasattr(obj, 'user_id'):
                     data['user_id'] = getattr(obj, 'user_id')
             elif field_name == 'mood':
-                if hasattr(obj, 'mood'):
-                    mood_value = getattr(obj, 'mood')
-                    if hasattr(mood_value, 'id'):
-                        data['mood'] = mood_value.id
+                if hasattr(obj, 'mood') and obj.mood:
+                    # If mood is a related object, get its ID
+                    if hasattr(obj.mood, 'id'):
+                        data['mood'] = obj.mood.id
                     else:
-                        data['mood'] = mood_value
-                elif hasattr(obj, 'mood_id'):
-                    data['mood'] = getattr(obj, 'mood_id')
+                        data['mood'] = obj.mood
+                elif hasattr(obj, 'mood_id') and obj.mood_id:
+                    data['mood'] = obj.mood_id
+                else:
+                    data['mood'] = None
             elif hasattr(obj, field_name):
                 data[field_name] = getattr(obj, field_name)
         return cls.model_validate(data)

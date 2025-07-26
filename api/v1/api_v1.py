@@ -12,10 +12,11 @@ from apps.diary.endpoints import (
     get_moods, get_diary_entries, create_diary_entry, get_diary_entry, 
     update_diary_entry, delete_diary_entry, upload_image
 )
-from apps.food_planner.endpoints import (
-    get_meal_types, get_food_entries, create_food_entry, get_food_entry,
-    update_food_entry, delete_food_entry, get_food_summary, get_calendar_data, upload_food_image
+from apps.food_tracker.endpoints import (
+    get_food_entries, create_food_entry, get_food_entry,
+    update_food_entry, delete_food_entry, get_food_summary
 )
+
 from apps.auth.endpoints import google_login, refresh_token, get_google_auth_url, google_callback
 from apps.changelog.endpoints import (
     get_changelog_entries, get_changelog_by_version,
@@ -71,16 +72,13 @@ v1_routes = [
     Gateway(handler=delete_diary_entry, path="/diary-entries/{entry_id:uuid}"),
     Gateway(handler=upload_image, path="/upload-image"),
     
-    # Food Planner endpoints
-    Gateway(handler=get_meal_types, path="/meal-types"),
+    # Food Tracker endpoints
     Gateway(handler=get_food_entries, path="/food-entries"),
     Gateway(handler=create_food_entry, path="/food-entries"),
     Gateway(handler=get_food_entry, path="/food-entries/{entry_id:uuid}"),
     Gateway(handler=update_food_entry, path="/food-entries/{entry_id:uuid}"),
     Gateway(handler=delete_food_entry, path="/food-entries/{entry_id:uuid}"),
     Gateway(handler=get_food_summary, path="/food-entries/summary"),
-    Gateway(handler=get_calendar_data, path="/food-entries/calendar"),
-    Gateway(handler=upload_food_image, path="/upload-food-image"),
     
     # Changelog endpoints
     Gateway(handler=get_changelog_entries, path="/changelog"),

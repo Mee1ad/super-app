@@ -42,7 +42,8 @@ class InitialSchemaConsolidatedMigration(Migration):
         from apps.changelog.models import ChangelogEntry, ChangelogView
         from apps.ideas.models import Category, Idea
         from apps.diary.models import Mood, DiaryEntry
-        from apps.food_planner.models import MealType, FoodEntry
+        from apps.food_tracker.models import FoodEntry
+
         
         # Create all tables using the registry
         await models_registry.create_all()
@@ -94,29 +95,7 @@ class InitialSchemaConsolidatedMigration(Migration):
                 """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {"name": name, "emoji": emoji, "color": color})
         logger.info("✅ Initial moods seeded")
         
-        # Seed meal types
-        logger.info("🔄 Seeding meal types...")
-        meal_types = [
-            ("Breakfast", "🌅", "08:00"),
-            ("Lunch", "☀️", "12:00"),
-            ("Dinner", "🌙", "18:00"),
-            ("Snack", "🍎", "15:00"),
-            ("Dessert", "🍰", "20:00")
-        ]
-        
-        for name, emoji, time in meal_types:
-            # Check if meal type already exists
-            existing_meal_type = await self.database.fetch_one(
-                "SELECT id FROM meal_types WHERE name = :name",
-                {"name": name}
-            )
-            
-            if not existing_meal_type:
-                await self.database.execute("""
-                    INSERT INTO meal_types (id, name, emoji, time, created_at, updated_at)
-                    VALUES ({uuid_func}, :name, :emoji, :time, {timestamp_default}, {timestamp_default})
-                """.format(uuid_func=uuid_func, timestamp_default=timestamp_default), {"name": name, "emoji": emoji, "time": time})
-        logger.info("✅ Meal types seeded")
+
         
         # Seed default categories for ideas
         logger.info("🔄 Seeding default categories...")

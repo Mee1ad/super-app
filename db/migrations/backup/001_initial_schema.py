@@ -36,7 +36,7 @@ class InitialSchemaMigration(Migration):
         from apps.changelog.models import ChangelogEntry, ChangelogView
         from apps.ideas.models import Category, Idea
         from apps.diary.models import Mood, DiaryEntry
-        from apps.food_planner.models import MealType, FoodEntry
+
         
         # Create all tables using the registry (including roles table)
         await models_registry.create_all()
@@ -47,8 +47,6 @@ class InitialSchemaMigration(Migration):
         tables_to_drop = [
             "changelog_views",
             "changelog_entries", 
-            "food_entries",
-            "meal_types",
             "diary_entries",
             "moods",
             "ideas",

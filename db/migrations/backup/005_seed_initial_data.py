@@ -4,7 +4,7 @@ Migration 005: Seed initial data
 from db.migrations.base import Migration, migration_manager
 from db.session import database
 from apps.diary.models import Mood
-from apps.food_planner.models import MealType
+
 
 
 class SeedInitialDataMigration(Migration):
@@ -68,21 +68,8 @@ class SeedInitialDataMigration(Migration):
             if not existing_mood:
                 await Mood.query.create(**mood_data)
         
-        # Seed meal types
-        meal_types_data = [
-            {"name": "breakfast", "emoji": "🌅", "time": "08:00"},
-            {"name": "lunch", "emoji": "🍕", "time": "12:00"},
-            {"name": "dinner", "emoji": "🍽️", "time": "18:00"},
-            {"name": "snack", "emoji": "☕", "time": "15:00"},
-            {"name": "dessert", "emoji": "🍰", "time": "20:00"}
-        ]
-        
-        for meal_data in meal_types_data:
-            existing_meal = await MealType.query.filter(name=meal_data["name"]).first()
-            if not existing_meal:
-                await MealType.query.create(**meal_data)
+
     
     async def down(self) -> None:
         """Remove seeded data"""
-        await MealType.query.delete()
         await Mood.query.delete() 
