@@ -64,8 +64,8 @@ JWT tokens contain three parts:
 
 ### Token Expiration
 
-- **Access Tokens**: 24 hours
-- **Refresh Tokens**: 30 days
+- **Access Tokens**: 30 days (configurable via JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+- **Refresh Tokens**: 30 days (configurable via JWT_REFRESH_TOKEN_EXPIRE_DAYS)
 - **API Tokens**: No expiration (until revoked)
 
 ## Security Best Practices

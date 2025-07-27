@@ -37,7 +37,7 @@ def register_migrations():
         import importlib.util
         
         migration_files = [
-            "db/migrations/001_initial_schema_consolidated.py"
+            "backend/db/migrations/001_initial_schema_consolidated.py"
         ]
         
         for migration_file in migration_files:

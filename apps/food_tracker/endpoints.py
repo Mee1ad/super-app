@@ -47,6 +47,9 @@ async def get_food_entries(
             limit=result["limit"],
             pages=result["pages"]
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are expected
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -43,7 +43,9 @@ class DiaryService:
         return entry
 
     async def create_entry(self, entry_data: DiaryEntryCreate, user_id: UUID) -> DiaryEntry:
-        await Mood.query.get(id=entry_data.mood)
+        # Only validate mood if it's provided
+        if entry_data.mood is not None:
+            await Mood.query.get(id=entry_data.mood)
         entry_data_dict = entry_data.model_dump()
         entry_data_dict['user_id'] = user_id
         return await DiaryEntry.query.create(**entry_data_dict)
@@ -51,7 +53,7 @@ class DiaryService:
     async def update_entry(self, entry_id: UUID, entry_data: DiaryEntryUpdate, user_id: UUID) -> DiaryEntry:
         entry = await self.get_entry_by_id(entry_id, user_id)
         update_data = {k: v for k, v in entry_data.model_dump().items() if v is not None}
-        if 'mood' in update_data:
+        if 'mood' in update_data and update_data['mood'] is not None:
             await Mood.query.get(id=update_data['mood'])
         await entry.update(**update_data)
         # Reload the entry to ensure user relation is loaded

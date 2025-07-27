@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     # JWT Configuration
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key")
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 30
-    jwt_refresh_token_expire_days: int = 7
+    jwt_access_token_expire_minutes: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))  # 30 days (30 * 24 * 60 = 43200 minutes)
+    jwt_refresh_token_expire_days: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "30"))  # 30 days
     
     # Google OAuth Configuration
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")

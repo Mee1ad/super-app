@@ -116,20 +116,20 @@ async def clean_database():
 async def setup_database():
     """Setup database with migrations for testing"""
     await database.connect()
-    
+
     # Import and run migrations
-    from db.migrate_incremental import main as run_migrations
-    
+    from db.migrate_incremental import run_migrations
+
     try:
         # Run migrations to create all tables
-        await run_migrations("migrate")
+        await run_migrations()
     except Exception as e:
         # If migrations fail, try to create tables manually for testing
         print(f"Migration failed: {e}")
         # This is a fallback for unit tests - in real scenarios migrations should work
-    
+
     yield database
-    
+
     # Clean up after tests
     try:
         # Clean up test data
@@ -139,7 +139,7 @@ async def setup_database():
         await database.execute("DELETE FROM shopping_items WHERE title LIKE 'Test%'")
     except Exception:
         pass
-    
+
     await database.disconnect()
 
 
