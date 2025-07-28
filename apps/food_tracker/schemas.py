@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel, Field
+from typing import Optional, List, Union
+from pydantic import BaseModel, Field, field_validator
+from uuid import UUID
 
 
 class FoodEntryBase(BaseModel):
@@ -28,10 +29,18 @@ class FoodEntryUpdate(BaseModel):
 
 class FoodEntryResponse(FoodEntryBase):
     """Schema for food entry response"""
-    id: str
-    user_id: str
+    id: Union[str, UUID]
+    user_id: Union[str, UUID]
     created_at: datetime
     updated_at: datetime
+    
+    @field_validator('id', 'user_id', mode='before')
+    @classmethod
+    def convert_to_string(cls, v):
+        """Convert UUID or User objects to string"""
+        if hasattr(v, 'id'):  # User object
+            return str(v.id)
+        return str(v)
     
     class Config:
         from_attributes = True

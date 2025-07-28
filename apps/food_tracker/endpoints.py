@@ -1,6 +1,10 @@
 from datetime import datetime
-from typing import Optional
-from esmerald import get, post, put, delete, HTTPException, status, Query, Request
+from typing import Optional, List
+from uuid import UUID
+from esmerald import get, post, put, delete, HTTPException, status, Query, Request, File, UploadFile
+import os
+import uuid
+from pathlib import Path
 from apps.food_tracker.models import FoodEntry
 from apps.food_tracker.schemas import (
     FoodEntryCreate, FoodEntryUpdate, FoodEntryResponse,
@@ -10,6 +14,9 @@ from apps.food_tracker.services import FoodTrackerService
 from core.dependencies import get_current_user_dependency
 from core.exceptions import NotFoundError, ValidationError
 
+
+UPLOAD_DIR = Path("uploads/food_images")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 @get(
     tags=["Food Tracker"],
@@ -64,14 +71,17 @@ async def get_food_entries(
 )
 async def get_food_entry(
     request: Request,
-    entry_id: str
+    entry_id: UUID
 ) -> FoodEntryResponse:
     """Get a specific food entry by ID"""
     try:
         current_user = await get_current_user_dependency(request)
         service = FoodTrackerService(current_user.id)
-        entry = await service.get_food_entry(entry_id)
+        entry = await service.get_food_entry(str(entry_id))
         return entry
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are expected
+        raise
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -100,6 +110,9 @@ async def create_food_entry(
         service = FoodTrackerService(current_user.id)
         entry = await service.create_food_entry(data)
         return entry
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are expected
+        raise
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,15 +132,18 @@ async def create_food_entry(
 )
 async def update_food_entry(
     request: Request,
-    entry_id: str,
+    entry_id: UUID,
     data: FoodEntryUpdate
 ) -> FoodEntryResponse:
     """Update an existing food entry"""
     try:
         current_user = await get_current_user_dependency(request)
         service = FoodTrackerService(current_user.id)
-        entry = await service.update_food_entry(entry_id, data)
+        entry = await service.update_food_entry(str(entry_id), data)
         return entry
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are expected
+        raise
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -153,14 +169,17 @@ async def update_food_entry(
 )
 async def delete_food_entry(
     request: Request,
-    entry_id: str
+    entry_id: UUID
 ) -> dict:
     """Delete a food entry"""
     try:
         current_user = await get_current_user_dependency(request)
         service = FoodTrackerService(current_user.id)
-        await service.delete_food_entry(entry_id)
+        await service.delete_food_entry(str(entry_id))
         return {"message": "Food entry deleted successfully"}
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are expected
+        raise
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -189,8 +208,48 @@ async def get_food_summary(
         service = FoodTrackerService(current_user.id)
         summary = await service.get_food_summary(start_date, end_date)
         return summary
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are expected
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve food summary: {str(e)}"
+        ) 
+
+
+@post(
+    tags=["Food Tracker"],
+    summary="Upload food image",
+    description="Upload an image for food entries and return its URL"
+)
+async def upload_food_image(file: UploadFile = File(...)) -> dict:
+    """Upload a food image and return its URL"""
+    try:
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only image files are allowed"
+            )
+        # Validate file size (5MB limit)
+        content = await file.read()
+        if len(content) > 5 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File too large. Maximum size is 5MB"
+            )
+        # Generate unique filename
+        file_extension = Path(file.filename).suffix or ".jpg"
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = UPLOAD_DIR / unique_filename
+        # Save file
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+        # Return URL
+        return {"url": f"/static/food_images/{unique_filename}"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload image: {str(e)}"
         ) 

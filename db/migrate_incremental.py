@@ -37,7 +37,8 @@ def register_migrations():
         import importlib.util
         
         migration_files = [
-            "backend/db/migrations/001_initial_schema_consolidated.py"
+            "backend/db/migrations/001_initial_schema_consolidated.py",
+            "backend/db/migrations/003_increase_image_url_length.py"
         ]
         
         for migration_file in migration_files:

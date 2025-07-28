@@ -14,7 +14,7 @@ from apps.diary.endpoints import (
 )
 from apps.food_tracker.endpoints import (
     get_food_entries, create_food_entry, get_food_entry,
-    update_food_entry, delete_food_entry, get_food_summary
+    update_food_entry, delete_food_entry, get_food_summary, upload_food_image
 )
 
 from apps.auth.endpoints import google_login, refresh_token, get_google_auth_url, google_callback
@@ -79,6 +79,7 @@ v1_routes = [
     Gateway(handler=update_food_entry, path="/food-entries/{entry_id:uuid}"),
     Gateway(handler=delete_food_entry, path="/food-entries/{entry_id:uuid}"),
     Gateway(handler=get_food_summary, path="/food-entries/summary"),
+    Gateway(handler=upload_food_image, path="/food-entries/upload"),
     
     # Changelog endpoints
     Gateway(handler=get_changelog_entries, path="/changelog"),

@@ -6,7 +6,7 @@ import platform
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from esmerald import Esmerald, Gateway, get, CORSConfig, Include, Request, options
+from esmerald import Esmerald, Gateway, get, CORSConfig, Include, Request, options, Response, HTTPException
 from core.config import settings
 from core.sentry import init_sentry
 from core.exceptions import sentry_exception_handler
@@ -16,6 +16,8 @@ from db.session import database
 from api.v1.api_v1 import v1_routes
 from datetime import datetime
 import logging
+import os
+from pathlib import Path
 
 # Configure logging based on debug mode
 if settings.debug:
@@ -119,25 +121,6 @@ def ping() -> dict:
     return {"message": "pong", "status": "healthy"}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @get(
     path="/deployment",
     tags=["Deployment"],
@@ -239,6 +222,51 @@ def deployment_info() -> dict:
     return {"message": "See the documentation tab for deployment instructions."}
 
 
+@get(
+    path="/static/{path:path}",
+    tags=["Static"],
+    summary="Serve static files",
+    description="Serve static files from the uploads directory"
+)
+async def serve_static(path: str) -> Response:
+    """Serve static files from uploads directory"""
+    try:
+        # Security: prevent directory traversal
+        if ".." in path or path.startswith("/"):
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Construct file path
+        file_path = Path("uploads") / path
+        
+        # Check if file exists
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Read file content
+        with open(file_path, "rb") as f:
+            content = f.read()
+        
+        # Determine content type based on file extension
+        content_type = "application/octet-stream"
+        if path.endswith((".jpg", ".jpeg")):
+            content_type = "image/jpeg"
+        elif path.endswith(".png"):
+            content_type = "image/png"
+        elif path.endswith(".gif"):
+            content_type = "image/gif"
+        elif path.endswith(".webp"):
+            content_type = "image/webp"
+        
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=31536000"}  # Cache for 1 year
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
+
 
 # Robust CORS configuration
 cors_config = CORSConfig(
@@ -261,6 +289,7 @@ app = Esmerald(
         Gateway(handler=root_options),
         Gateway(handler=ping),
         Gateway(handler=deployment_info),
+        Gateway(handler=serve_static),
         # V1 API routes - all under /api/v1/
         Include(routes=v1_routes, path="/api/v1"),
     ],
