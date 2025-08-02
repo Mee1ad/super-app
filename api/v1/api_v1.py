@@ -28,6 +28,8 @@ from apps.changelog.endpoints import (
     debug_user_views
 )
 
+from apps.replicache.endpoints import sse_events, poke, replicache_pull, replicache_push
+
 # V1 API Router - All endpoints under /api/v1/
 v1_routes = [
     # Auth endpoints
@@ -99,4 +101,10 @@ v1_routes = [
     Gateway(handler=get_latest_changelog_for_user, path="/changelog/latest"),
     Gateway(handler=mark_changelog_viewed, path="/changelog/viewed"),
     Gateway(handler=debug_user_views, path="/changelog/debug"),
+
+    # Replicache endpoints
+    Gateway(handler=sse_events, path="/replicache/events"),
+    Gateway(handler=poke, path="/replicache/poke"),
+    Gateway(handler=replicache_pull, path="/replicache/pull"),
+    Gateway(handler=replicache_push, path="/replicache/push"),
 ] 

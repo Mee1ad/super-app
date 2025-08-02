@@ -1,0 +1,144 @@
+
+# Backend Cursor Rules for SuperApp Project
+
+## Project Structure
+
+- Use **multi-app, feature-based structure**
+- Version API from day one using `/api/v1/` for all endpoints
+- Use **feature-first structure** with apps/, api/, core/, db/, tests/
+
+## Framework Setup
+
+- Use `Esmerald` for ASGI support
+- Use `Edgy` ORM (default for Esmerald)
+- Separate routers per domain
+- Use `APIGateHandler` for global error handling
+
+## Best Practices
+
+### General
+- Use **environment-based settings** via `pydantic.BaseSettings`
+- Use `.env` for secrets and config
+- Enable type hints and enforce with `mypy`
+- Apply linters: `ruff`, `black`, `isort`
+
+### Versioning
+- Namespace all APIs under `/api/v1/...`
+- Use versioned routers (`v1_router`, etc.)
+
+### Schemas
+- Separate `schemas.py` for request/response models
+- Use `pydantic.BaseModel`
+- Always validate input and sanitize output
+
+### Database
+- Use `Edgy` for models
+- Place reusable base model logic in `db/base.py`
+- Use Alembic (or Edgy-native migrations) for schema versioning
+
+### Services Layer
+- Put business logic in `services.py`
+- Endpoints should call services only
+- Keep endpoints thin and declarative
+
+### Error Handling
+- Use Esmerald's `APIException`
+- Centralize error messages in `core/exceptions.py`
+- Provide clear messages and codes
+- Implement comprehensive error handling in all async actions
+- Always notify clients via visible feedback
+- Never allow silent failures
+
+### Security
+- Use OAuth2/JWT in `core/security.py`
+- Use dependencies for RBAC/permissions
+- Sanitize sensitive fields before returning to users
+
+### Middleware
+- Log every request/response time
+- Handle CORS, gzip, error wrapping, and authentication globally
+
+### API Documentation
+- Keep all OpenAPI documentation inline in Python code using Esmerald decorators
+- Include comprehensive error documentation in docstrings
+- Use defined error response schemas
+- **ALWAYS include comprehensive error documentation in endpoint docstrings for every new API**
+- **Document ALL possible error responses (400, 401, 404, 422, 429, 503) for every new endpoint**
+
+### Testing
+- Use `pytest`
+- Separate unit and integration tests
+- Use `TestClient(app=...)` from Esmerald
+- Use factories for fake data (e.g. `factory_boy`)
+- **ALWAYS write comprehensive tests for any new code or changes**
+- **Write ALL required test types: unit tests, integration tests, error scenario tests**
+- **Test both success cases and failure scenarios for every endpoint**
+- **Include tests for validation errors, not found errors, authentication errors, and edge cases**
+- **ALWAYS run unit tests and e2e tests after any code changes**
+- **Continue running tests until ALL tests pass before proceeding**
+- **Never commit or deploy code with failing tests**
+- **Iterate over tests until ALL tests pass - fix failures immediately**
+- Run tests with: `pytest tests/` for all tests, `pytest tests/unit/` for unit tests, `pytest tests/integration/` for e2e tests
+- Use `pytest -v` for verbose output to see which specific tests are failing
+- Fix any test failures immediately before making additional changes
+
+### DevOps
+- Include Docker support
+- Use `.env` and `.env.example`
+- Use `Makefile` or `justfile` for common dev commands
+- Add pre-commit hooks
+- Setup CI (GitHub Actions or others)
+- **Configure CI/CD to run tests automatically on every commit**
+- **Block merges to main branch if any tests fail**
+- **Set up test coverage reporting and maintain minimum coverage thresholds**
+
+### Monitoring
+- Add request logging with `structlog`
+- Optional: integrate Sentry or Prometheus
+
+### Misc
+- Use consistent naming (snake_case for files, PascalCase for classes)
+- Group async and sync functions clearly
+- Prefer `async` endpoints for scalability
+- **Write tests for every new feature or bug fix**
+- **Maintain test coverage above 80%**
+- **Test both happy path and edge cases**
+
+## General Rules
+
+### Commit Messages
+- Keep commit messages short (less than 10 words)
+- Make small commits with clear messages
+- Each commit should represent a single logical change
+- Use descriptive messages that explain the "why"
+- Use imperative mood ("add feature" not "added feature")
+- Start with lowercase letters
+- Use present tense
+- Examples: "fix auth bug", "add user validation", "update docs"
+- **Each commit should represent a single logical change**
+- **Break large changes into multiple smaller commits**
+- **Use descriptive commit messages that explain the "why" not just the "what"**
+
+### Terminal Commands
+- Use `python` for Python commands
+- Use `pip` for package management
+- Use Windows commands when appropriate
+- Don't run "dev" or "build" commands in terminal unless specifically requested
+
+### PowerShell Compatibility (MANDATORY)
+- **ALL commands must be compatible with Windows PowerShell**
+- Use `;` instead of `&&` for command chaining in PowerShell
+- Use `cd` with semicolon: `cd path; command` instead of `cd path && command`
+- Use PowerShell-compatible syntax for all shell commands
+- Test commands in PowerShell before suggesting them
+- Use `powershell.exe` explicitly when needed for complex commands
+- Avoid bash-specific syntax like `&&`, `||`, `$()` command substitution
+- Use PowerShell equivalents: `;` for chaining, `$()` for variables, `|` for piping
+- **Always verify command compatibility with Windows PowerShell before execution**
+
+---
+
+> Extend this guide per project requirements. Consistency and clarity first. 
+---
+
+> Extend this guide per project requirements. Consistency and clarity first. 
