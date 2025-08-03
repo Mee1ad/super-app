@@ -3,7 +3,11 @@ from typing import Dict, Set, Any, Optional
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+
+from fastapi import HTTPException, status
+from fastapi.responses import Response
+from edgy import Database
 
 from core.dependencies import get_current_user_dependency
 
@@ -12,6 +16,27 @@ from asyncio import QueueFull
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+def create_cookie(user_id: str, client_id: str, last_mutation_id: int, client_name: str) -> str:
+    """Create a cookie with current state information"""
+    cookie_data = {
+        "lastMutationID": last_mutation_id,
+        "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),  # milliseconds
+        "userId": user_id,
+        "clientId": client_id,
+        "clientName": client_name
+    }
+    return json.dumps(cookie_data)
+
+def parse_cookie(cookie: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Parse a cookie string into a dictionary"""
+    if not cookie:
+        return None
+    try:
+        return json.loads(cookie)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning(f"Failed to parse cookie: {cookie}")
+        return None
 
 class SSEManager:
     """Singleton manager for user-specific SSE connections"""
@@ -223,6 +248,14 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     
     logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
     
+    # Parse incoming cookie if provided
+    incoming_cookie = body.get('cookie')
+    if incoming_cookie:
+        parsed_cookie = parse_cookie(incoming_cookie)
+        if parsed_cookie:
+            logger.info(f"Parsed incoming cookie: {parsed_cookie}")
+            # You can use the parsed cookie data for validation or additional logic
+    
     # Get the client's last mutation ID
     last_mutation_id = await sse_manager.get_client_mutation_id(user_id, client_id)
     logger.info(f"Client {client_id} last mutation ID: {last_mutation_id}")
@@ -248,13 +281,21 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     # Get current mutation ID changes for this user
     last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
     
-    return Response(
-        {
-            "lastMutationIDChanges": last_mutation_id_changes,
-            "cookie": None,
-            "patch": patch
-        }
-    )
+    # Create cookie with current state
+    cookie = create_cookie(user_id, client_id, last_mutation_id, client_name)
+    
+    # Check if we have any changes to report
+    has_changes = bool(last_mutation_id_changes) or bool(patch)
+    
+    # If no changes, return empty lastMutationIDChanges to avoid Replicache error
+    if not has_changes:
+        last_mutation_id_changes = {}
+    
+    return {
+        "lastMutationIDChanges": last_mutation_id_changes,
+        "cookie": cookie,
+        "patch": patch
+    }
 
 # Replicache push
 @post(
@@ -289,6 +330,15 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     
     logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
     
+    # Parse incoming cookie if provided
+    incoming_cookie = body.get('cookie')
+    if incoming_cookie:
+        parsed_cookie = parse_cookie(incoming_cookie)
+        if parsed_cookie:
+            logger.info(f"Parsed incoming cookie: {parsed_cookie}")
+            # You can use the parsed cookie data for validation or additional logic
+            # For example, check if the client's lastMutationID matches what we expect
+    
     # Import services
     from apps.replicache.services import (
         process_todo_mutation, process_food_mutation, 
@@ -322,15 +372,19 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     # Notify user's clients
     await sse_manager.notify_user(user_id, "sync")
     
+    # Get the updated last mutation ID for this client
+    last_mutation_id = await sse_manager.get_client_mutation_id(user_id, client_id)
+    
     # Get updated mutation ID changes for this user
     last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
     
-    return Response(
-        {
-            "lastMutationIDChanges": last_mutation_id_changes,
-            "cookie": None
-        }
-    )
+    # Create cookie with updated state
+    cookie = create_cookie(user_id, client_id, last_mutation_id, client_name)
+    
+    return {
+        "lastMutationIDChanges": last_mutation_id_changes,
+        "cookie": cookie
+    }
 
 # Debug endpoint to get connection stats
 @get(
