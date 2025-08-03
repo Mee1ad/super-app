@@ -5,8 +5,6 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import HTTPException, status
-from fastapi.responses import Response
 from edgy import Database
 
 from core.dependencies import get_current_user_dependency
@@ -161,6 +159,10 @@ async def sse_stream(request: Request) -> Response:
             }
         )
     
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (like 401) as-is
+        logger.error(f"SSE stream HTTP error: {e.status_code} - {e.detail}")
+        raise
     except Exception as e:
         logger.error(f"SSE stream error for user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stream error")
