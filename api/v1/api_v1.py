@@ -28,7 +28,7 @@ from apps.changelog.endpoints import (
     debug_user_views
 )
 
-from apps.replicache.endpoints import sse_events, poke, replicache_pull, replicache_push
+from apps.replicache.endpoints import sse_events, poke, replicache_pull, replicache_push, sse_stream, poke_user, get_sse_stats
 
 # V1 API Router - All endpoints under /api/v1/
 v1_routes = [
@@ -107,4 +107,9 @@ v1_routes = [
     Gateway(handler=poke, path="/replicache/poke"),
     Gateway(handler=replicache_pull, path="/replicache/pull"),
     Gateway(handler=replicache_push, path="/replicache/push"),
+    
+    # New SSE Stream endpoints
+    Gateway(handler=sse_stream, path="/replicache/stream"),
+    Gateway(handler=poke_user, path="/replicache/poke-user"),
+    Gateway(handler=get_sse_stats, path="/replicache/stats"),
 ] 

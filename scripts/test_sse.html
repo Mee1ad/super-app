@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE Stream Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        .messages {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .message.connected { background-color: #d1ecf1; }
+        .message.ping { background-color: #fff3cd; }
+        .message.sync { background-color: #d4edda; }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .stats {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SSE Stream Test</h1>
+        
+        <div class="controls">
+            <input type="text" id="userId" placeholder="User ID" value="test_user">
+            <input type="text" id="serverUrl" placeholder="Server URL" value="http://localhost:8000">
+            <button onclick="connect()" id="connectBtn">Connect</button>
+            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+            <button onclick="poke()" id="pokeBtn" disabled>Poke User</button>
+            <button onclick="getStats()" id="statsBtn" disabled>Get Stats</button>
+        </div>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div class="stats" id="stats">
+            <strong>Stats:</strong> <span id="statsText">Not connected</span>
+        </div>
+        
+        <h3>Messages:</h3>
+        <div id="messages" class="messages"></div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let isConnected = false;
+        
+        function updateStatus(status, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.className = `status ${className}`;
+        }
+        
+        function addMessage(message, type = '') {
+            const messagesEl = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            messageEl.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        
+        function updateButtons() {
+            document.getElementById('connectBtn').disabled = isConnected;
+            document.getElementById('disconnectBtn').disabled = !isConnected;
+            document.getElementById('pokeBtn').disabled = !isConnected;
+            document.getElementById('statsBtn').disabled = !isConnected;
+        }
+        
+        async function connect() {
+            const userId = document.getElementById('userId').value;
+            const serverUrl = document.getElementById('serverUrl').value;
+            
+            if (!userId || !serverUrl) {
+                alert('Please enter both User ID and Server URL');
+                return;
+            }
+            
+            updateStatus('Connecting...', 'connecting');
+            addMessage('Attempting to connect...');
+            
+            try {
+                // For testing purposes, we'll use a mock token
+                // In production, you'd get this from your auth system
+                const mockToken = `mock_token_for_${userId}`;
+                
+                const url = `${serverUrl}/api/v1/replicache/stream`;
+                eventSource = new EventSource(url, {
+                    headers: {
+                        'Authorization': `Bearer ${mockToken}`
+                    }
+                });
+                
+                eventSource.onopen = function(event) {
+                    isConnected = true;
+                    updateStatus('Connected', 'connected');
+                    addMessage('Connected to SSE stream', 'connected');
+                    updateButtons();
+                };
+                
+                eventSource.onmessage = function(event) {
+                    addMessage(`Received: ${event.data}`, event.data);
+                };
+                
+                eventSource.onerror = function(event) {
+                    isConnected = false;
+                    updateStatus('Connection Error', 'disconnected');
+                    addMessage('Connection error occurred');
+                    updateButtons();
+                    eventSource.close();
+                };
+                
+            } catch (error) {
+                updateStatus('Connection Failed', 'disconnected');
+                addMessage(`Connection failed: ${error.message}`);
+                updateButtons();
+            }
+        }
+        
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            isConnected = false;
+            updateStatus('Disconnected', 'disconnected');
+            addMessage('Disconnected from SSE stream');
+            updateButtons();
+        }
+        
+        async function poke() {
+            const userId = document.getElementById('userId').value;
+            const serverUrl = document.getElementById('serverUrl').value;
+            
+            try {
+                const mockToken = `mock_token_for_${userId}`;
+                const response = await fetch(`${serverUrl}/api/v1/replicache/poke-user`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${mockToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                addMessage(`Poke result: ${JSON.stringify(result)}`, 'sync');
+            } catch (error) {
+                addMessage(`Poke failed: ${error.message}`);
+            }
+        }
+        
+        async function getStats() {
+            const userId = document.getElementById('userId').value;
+            const serverUrl = document.getElementById('serverUrl').value;
+            
+            try {
+                const mockToken = `mock_token_for_${userId}`;
+                const response = await fetch(`${serverUrl}/api/v1/replicache/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${mockToken}`
+                    }
+                });
+                
+                const stats = await response.json();
+                document.getElementById('statsText').textContent = JSON.stringify(stats, null, 2);
+            } catch (error) {
+                document.getElementById('statsText').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html> 

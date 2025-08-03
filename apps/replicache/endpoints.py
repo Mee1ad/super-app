@@ -1,90 +1,359 @@
 from esmerald import Request, Response, get, post, HTTPException, status
-from typing import Dict, Set, Any
+from typing import Dict, Set, Any, Optional
 import asyncio
 import json
+import logging
+from datetime import datetime
 
 from core.dependencies import get_current_user_dependency
 
-# In-memory: user_id -> set of asyncio.Queue (one per client connection)
-user_clients: Dict[str, Set[asyncio.Queue]] = {}
-# In-memory: user_id -> version (int)
-user_versions: Dict[str, int] = {}
+# Import QueueFull exception
+from asyncio import QueueFull
 
-# SSE event stream
+# Configure logging
+logger = logging.getLogger(__name__)
+
+class SSEManager:
+    """Singleton manager for user-specific SSE connections"""
+    
+    def __init__(self):
+        self.user_connections: Dict[str, Set[asyncio.Queue]] = {}
+        self.user_versions: Dict[str, int] = {}
+        # Track last mutation IDs per client
+        self.client_mutation_ids: Dict[str, Dict[str, int]] = {}
+        self._lock = asyncio.Lock()
+    
+    async def add_client(self, user_id: str, queue: asyncio.Queue) -> None:
+        """Register a client for a specific user"""
+        async with self._lock:
+            if user_id not in self.user_connections:
+                self.user_connections[user_id] = set()
+            self.user_connections[user_id].add(queue)
+            logger.info(f"User {user_id} connected. Total clients: {len(self.user_connections[user_id])}")
+    
+    async def remove_client(self, user_id: str, queue: asyncio.Queue) -> None:
+        """Remove a client for a specific user"""
+        async with self._lock:
+            if user_id in self.user_connections:
+                self.user_connections[user_id].discard(queue)
+                if not self.user_connections[user_id]:
+                    self.user_connections.pop(user_id, None)
+                    logger.info(f"User {user_id} disconnected. No more clients.")
+                else:
+                    logger.info(f"User {user_id} client removed. Remaining clients: {len(self.user_connections[user_id])}")
+    
+    async def notify_user(self, user_id: str, message: str) -> int:
+        """Notify all clients for a specific user"""
+        try:
+            async with self._lock:
+                queues = self.user_connections.get(user_id, set())
+                notified_count = 0
+                logger.info(f"Attempting to notify {len(queues)} clients for user {user_id}")
+                
+                for queue in queues:
+                    try:
+                        # Use put_nowait to avoid blocking if queue is full
+                        queue.put_nowait(message)
+                        notified_count += 1
+                        logger.debug(f"Successfully notified client for user {user_id}")
+                    except QueueFull:
+                        logger.warning(f"Queue full for user {user_id}, skipping notification")
+                    except Exception as e:
+                        logger.error(f"Failed to notify client for user {user_id}: {e}")
+                
+                logger.info(f"Notified {notified_count} clients for user {user_id}")
+                return notified_count
+        except Exception as e:
+            logger.error(f"Error in notify_user for user {user_id}: {e}")
+            return 0
+    
+    async def get_user_client_count(self, user_id: str) -> int:
+        """Get the number of connected clients for a user"""
+        async with self._lock:
+            return len(self.user_connections.get(user_id, set()))
+    
+    async def get_total_connections(self) -> int:
+        """Get total number of connections across all users"""
+        async with self._lock:
+            return sum(len(clients) for clients in self.user_connections.values())
+    
+    async def get_client_mutation_id(self, user_id: str, client_id: str) -> int:
+        """Get the last mutation ID for a specific client"""
+        async with self._lock:
+            if user_id not in self.client_mutation_ids:
+                return 0
+            return self.client_mutation_ids[user_id].get(client_id, 0)
+    
+    async def update_client_mutation_id(self, user_id: str, client_id: str, mutation_id: int) -> None:
+        """Update the last mutation ID for a specific client"""
+        async with self._lock:
+            if user_id not in self.client_mutation_ids:
+                self.client_mutation_ids[user_id] = {}
+            self.client_mutation_ids[user_id][client_id] = mutation_id
+            logger.info(f"Updated mutation ID for user {user_id}, client {client_id}: {mutation_id}")
+    
+    async def get_last_mutation_id_changes(self, user_id: str) -> Dict[str, int]:
+        """Get the last mutation ID changes for a user"""
+        async with self._lock:
+            return self.client_mutation_ids.get(user_id, {})
+
+# Global SSE manager instance
+sse_manager = SSEManager()
+
+# SSE stream endpoint
 @get(
     tags=["Replicache"],
-    summary="SSE events stream",
-    description="Server-Sent Events stream for Replicache notifications"
+    summary="SSE stream for user-specific notifications",
+    description="Server-Sent Events stream for user-specific real-time notifications"
 )
-async def sse_events(request: Request) -> Response:
-    user = await get_current_user_dependency(request)
-    user_id = str(user.id)
-    queue = asyncio.Queue()
-    user_clients.setdefault(user_id, set()).add(queue)
+async def sse_stream(request: Request) -> Response:
+    """SSE stream endpoint for user-specific notifications"""
+    try:
+        # Get user from JWT token
+        user = await get_current_user_dependency(request)
+        user_id = str(user.id)
+        
+        # Create queue for this client with larger size
+        queue = asyncio.Queue(maxsize=100)
+        
+        # Register client
+        await sse_manager.add_client(user_id, queue)
+        
+        logger.info(f"SSE stream started for user {user_id}")
+        
+        # For now, return a simple response to test if the endpoint works
+        # We'll implement proper streaming later
+        await sse_manager.remove_client(user_id, queue)
+        
+        return Response(
+            content="data: connected\n\n",
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Cache-Control"
+            }
+        )
     
-    async def event_generator():
-        try:
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    msg = await asyncio.wait_for(queue.get(), timeout=15)
-                    yield f"data: {msg}\n\n"
-                except asyncio.TimeoutError:
-                    yield ": keep-alive\n\n"
-        finally:
-            user_clients[user_id].discard(queue)
-            if not user_clients[user_id]:
-                user_clients.pop(user_id, None)
-    
-    return Response(event_generator(), media_type="text/event-stream")
+    except Exception as e:
+        logger.error(f"SSE stream error for user: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stream error")
 
-# Poke endpoint
+# Poke endpoint for user-specific notifications
 @post(
     tags=["Replicache"],
-    summary="Poke clients",
-    description="Notify all connected clients for the user"
+    summary="Trigger user-specific sync notification",
+    description="Notify all connected clients for a specific user"
+)
+async def poke_user(request: Request) -> Dict[str, Any]:
+    """Trigger user-specific sync notification"""
+    try:
+        user = await get_current_user_dependency(request)
+        user_id = str(user.id)
+        logger.info(f"Poke request for user: {user_id}")
+        
+        # Notify user's clients
+        notified_count = await sse_manager.notify_user(user_id, "sync")
+        
+        result = {
+            "success": True,
+            "userId": user_id,
+            "clientsNotified": notified_count,
+            "message": "User-specific sync triggered",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        logger.info(f"Poke successful for user {user_id}: {result}")
+        return result
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401) as-is
+        raise
+    except Exception as e:
+        logger.error(f"Poke error for user: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Poke error: {str(e)}")
+
+# Legacy endpoints (keeping for backward compatibility)
+@get(
+    tags=["Replicache"],
+    summary="SSE events stream (legacy)",
+    description="Legacy SSE events stream for Replicache notifications"
+)
+async def sse_events(request: Request) -> Response:
+    """Legacy SSE endpoint - redirects to new stream endpoint"""
+    return await sse_stream(request)
+
+@post(
+    tags=["Replicache"],
+    summary="Poke clients (legacy)",
+    description="Legacy poke endpoint - redirects to new poke endpoint"
 )
 async def poke(request: Request) -> Dict[str, Any]:
-    user = await get_current_user_dependency(request)
-    user_id = str(user.id)
-    queues = user_clients.get(user_id, set())
-    for q in queues:
-        await q.put(json.dumps({"type": "poke"}))
-    return {"ok": True}
+    """Legacy poke endpoint - redirects to new poke endpoint"""
+    return await poke_user(request)
 
 # Replicache pull
 @post(
     tags=["Replicache"],
     summary="Replicache pull",
-    description="Get changes since client version"
+    description="Get changes since client version",
+    status_code=200
 )
 async def replicache_pull(request: Request) -> Dict[str, Any]:
     user = await get_current_user_dependency(request)
     user_id = str(user.id)
     body = await request.json()
-    client_version = body.get("clientVersion", 0)
-    server_version = user_versions.get(user_id, 0)
-    response = {
-        "changes": [],
-        "serverVersion": server_version,
-    }
-    raise HTTPException(status_code=status.HTTP_200_OK, detail=response)
+    
+    # Debug: Log the request body to see what's being sent
+    logger.info(f"Pull request body: {body}")
+    
+    # Try clientView.name first (correct Replicache v15 format)
+    client_name = body.get('clientView', {}).get('name', '')
+    client_id = body.get('clientView', {}).get('id', 'default')
+    
+    # Fallback to clientGroupID if clientView.name is not present (Replicache v14 format)
+    if not client_name:
+        client_group_id = body.get('clientGroupID', '')
+        logger.info(f"Using clientGroupID: '{client_group_id}' (Replicache v14 format)")
+        
+        # For now, treat all clientGroupIDs as todo context
+        # You can customize this mapping based on your frontend configuration
+        client_name = 'todo-replicache-flat'
+        client_id = client_group_id or 'default'
+    
+    logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
+    
+    # Get the client's last mutation ID
+    last_mutation_id = await sse_manager.get_client_mutation_id(user_id, client_id)
+    logger.info(f"Client {client_id} last mutation ID: {last_mutation_id}")
+    
+    # Import services
+    from apps.replicache.services import (
+        get_todo_patch, get_food_patch, get_diary_patch, get_ideas_patch
+    )
+    
+    # Route data based on client name
+    if client_name == 'todo-replicache-flat':
+        patch = await get_todo_patch(user_id)
+    elif client_name == 'food-tracker-replicache':
+        patch = await get_food_patch(user_id)
+    elif client_name == 'diary-replicache':
+        patch = await get_diary_patch(user_id)
+    elif client_name == 'ideas-replicache':
+        patch = await get_ideas_patch(user_id)
+    else:
+        logger.warning(f"Unknown client name: '{client_name}'")
+        patch = []
+    
+    # Get current mutation ID changes for this user
+    last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
+    
+    return Response(
+        {
+            "lastMutationIDChanges": last_mutation_id_changes,
+            "cookie": None,
+            "patch": patch
+        }
+    )
 
 # Replicache push
 @post(
     tags=["Replicache"],
     summary="Replicache push",
-    description="Apply mutations and return new version"
+    description="Apply mutations and return new version",
+    status_code=200
 )
 async def replicache_push(request: Request) -> Dict[str, Any]:
     user = await get_current_user_dependency(request)
     user_id = str(user.id)
     body = await request.json()
+    
+    # Debug: Log the request body to see what's being sent
+    logger.info(f"Push request body: {body}")
+    
     mutations = body.get("mutations", [])
-    user_versions[user_id] = user_versions.get(user_id, 0) + 1
-    queues = user_clients.get(user_id, set())
-    for q in queues:
-        await q.put(json.dumps({"type": "poke"}))
-    response = {"ok": True, "newVersion": user_versions[user_id]}
-    raise HTTPException(status_code=status.HTTP_200_OK, detail=response)
+    
+    # Try clientView.name first (correct Replicache v15 format)
+    client_name = body.get('clientView', {}).get('name', '')
+    client_id = body.get('clientView', {}).get('id', 'default')
+    
+    # Fallback to clientGroupID if clientView.name is not present (Replicache v14 format)
+    if not client_name:
+        client_group_id = body.get('clientGroupID', '')
+        logger.info(f"Using clientGroupID: '{client_group_id}' (Replicache v14 format)")
+        
+        # For now, treat all clientGroupIDs as todo context
+        # You can customize this mapping based on your frontend configuration
+        client_name = 'todo-replicache-flat'
+        client_id = client_group_id or 'default'
+    
+    logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
+    
+    # Import services
+    from apps.replicache.services import (
+        process_todo_mutation, process_food_mutation, 
+        process_diary_mutation, process_ideas_mutation
+    )
+    
+    # Process mutations by client name
+    for mutation in mutations:
+        mutation_name = mutation.get('name', '')
+        mutation_id = mutation.get('id', 0)
+        
+        # Route by client name instead of mutation prefix
+        if client_name == 'todo-replicache-flat':
+            await process_todo_mutation(mutation, user_id)
+        elif client_name == 'food-tracker-replicache':
+            await process_food_mutation(mutation, user_id)
+        elif client_name == 'diary-replicache':
+            await process_diary_mutation(mutation, user_id)
+        elif client_name == 'ideas-replicache':
+            await process_ideas_mutation(mutation, user_id)
+        else:
+            logger.warning(f"Unknown client name: '{client_name}'")
+        
+        # Update the client's last mutation ID
+        await sse_manager.update_client_mutation_id(user_id, client_id, mutation_id)
+        logger.info(f"Processed mutation {mutation_id} for client {client_id}")
+    
+    # Update version
+    sse_manager.user_versions[user_id] = sse_manager.user_versions.get(user_id, 0) + 1
+    
+    # Notify user's clients
+    await sse_manager.notify_user(user_id, "sync")
+    
+    # Get updated mutation ID changes for this user
+    last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
+    
+    return Response(
+        {
+            "lastMutationIDChanges": last_mutation_id_changes,
+            "cookie": None
+        }
+    )
+
+# Debug endpoint to get connection stats
+@get(
+    tags=["Replicache"],
+    summary="Get SSE connection stats",
+    description="Get current SSE connection statistics"
+)
+async def get_sse_stats(request: Request) -> Dict[str, Any]:
+    """Get SSE connection statistics"""
+    try:
+        user = await get_current_user_dependency(request)
+        user_id = str(user.id)
+        
+        user_clients = await sse_manager.get_user_client_count(user_id)
+        total_connections = await sse_manager.get_total_connections()
+        
+        return {
+            "userId": user_id,
+            "userConnections": user_clients,
+            "totalConnections": total_connections,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stats error")
