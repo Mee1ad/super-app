@@ -323,6 +323,7 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     logger.info(f"Push request body: {body}")
     
     mutations = body.get("mutations", [])
+    logger.info(f"Processing {len(mutations)} mutations for user {user_id}")
     
     # Try clientView.name first (correct Replicache v15 format)
     client_name = body.get('clientView', {}).get('name', '')
@@ -333,9 +334,36 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
         client_group_id = body.get('clientGroupID', '')
         logger.info(f"Using clientGroupID: '{client_group_id}' (Replicache v14 format)")
         
-        # For now, treat all clientGroupIDs as todo context
-        # You can customize this mapping based on your frontend configuration
-        client_name = 'todo-replicache-flat'
+        # Intelligently detect client type based on mutation names
+        if mutations:
+            # Check the first mutation to determine client type
+            first_mutation_name = mutations[0].get('name', '')
+            logger.info(f"Detecting client type from mutation: {first_mutation_name}")
+            
+            if first_mutation_name in ['createEntry', 'updateEntry', 'deleteEntry']:
+                # Check if it's food tracker or diary based on args
+                first_args = mutations[0].get('args', {})
+                if 'mealType' in first_args or 'name' in first_args:
+                    client_name = 'food-tracker-replicache'
+                    logger.info(f"Detected food-tracker-replicache based on mutation: {first_mutation_name}")
+                else:
+                    client_name = 'diary-replicache'
+                    logger.info(f"Detected diary-replicache based on mutation: {first_mutation_name}")
+            elif first_mutation_name in ['createItem', 'updateItem', 'deleteItem']:
+                client_name = 'todo-replicache-flat'
+                logger.info(f"Detected todo-replicache-flat based on mutation: {first_mutation_name}")
+            elif first_mutation_name in ['createIdea', 'updateIdea', 'deleteIdea']:
+                client_name = 'ideas-replicache'
+                logger.info(f"Detected ideas-replicache based on mutation: {first_mutation_name}")
+            else:
+                # Default fallback
+                client_name = 'todo-replicache-flat'
+                logger.warning(f"Unknown mutation type: {first_mutation_name}, defaulting to todo-replicache-flat")
+        else:
+            # No mutations, default to todo
+            client_name = 'todo-replicache-flat'
+            logger.warning("No mutations found, defaulting to todo-replicache-flat")
+        
         client_id = client_group_id or 'default'
     
     logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
@@ -356,31 +384,50 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     )
     
     # Process mutations by client name
-    for mutation in mutations:
+    for i, mutation in enumerate(mutations):
         mutation_name = mutation.get('name', '')
         mutation_id = mutation.get('id', 0)
+        args = mutation.get('args', {})
         
-        # Route by client name instead of mutation prefix
-        if client_name == 'todo-replicache-flat':
-            await process_todo_mutation(mutation, user_id)
-        elif client_name == 'food-tracker-replicache':
-            await process_food_mutation(mutation, user_id)
-        elif client_name == 'diary-replicache':
-            await process_diary_mutation(mutation, user_id)
-        elif client_name == 'ideas-replicache':
-            await process_ideas_mutation(mutation, user_id)
-        else:
-            logger.warning(f"Unknown client name: '{client_name}'")
+        logger.info(f"Processing mutation {i+1}/{len(mutations)}: {mutation_name} with args: {args}")
         
-        # Update the client's last mutation ID
-        await sse_manager.update_client_mutation_id(user_id, client_id, mutation_id)
-        logger.info(f"Processed mutation {mutation_id} for client {client_id}")
+        try:
+            # Route by client name instead of mutation prefix
+            if client_name == 'todo-replicache-flat':
+                logger.info(f"Routing to process_todo_mutation for mutation: {mutation_name}")
+                await process_todo_mutation(mutation, user_id, i)
+                logger.info(f"Successfully processed todo mutation: {mutation_name}")
+            elif client_name == 'food-tracker-replicache':
+                logger.info(f"Routing to process_food_mutation for mutation: {mutation_name}")
+                await process_food_mutation(mutation, user_id, i)
+                logger.info(f"Successfully processed food mutation: {mutation_name}")
+            elif client_name == 'diary-replicache':
+                logger.info(f"Routing to process_diary_mutation for mutation: {mutation_name}")
+                await process_diary_mutation(mutation, user_id, i)
+                logger.info(f"Successfully processed diary mutation: {mutation_name}")
+            elif client_name == 'ideas-replicache':
+                logger.info(f"Routing to process_ideas_mutation for mutation: {mutation_name}")
+                await process_ideas_mutation(mutation, user_id, i)
+                logger.info(f"Successfully processed ideas mutation: {mutation_name}")
+            else:
+                logger.warning(f"Unknown client name: '{client_name}'")
+            
+            # Update the client's last mutation ID
+            await sse_manager.update_client_mutation_id(user_id, client_id, mutation_id)
+            logger.info(f"Processed mutation {mutation_id} for client {client_id}")
+            
+        except Exception as e:
+            logger.error(f"Error processing mutation {mutation_name}: {e}", exc_info=True)
+            # Re-raise the exception to ensure the client knows about the error
+            raise
     
     # Update version
     sse_manager.user_versions[user_id] = sse_manager.user_versions.get(user_id, 0) + 1
+    logger.info(f"Updated user version to: {sse_manager.user_versions[user_id]}")
     
     # Notify user's clients
     await sse_manager.notify_user(user_id, "sync")
+    logger.info(f"Notified user {user_id} about sync")
     
     # Get the updated last mutation ID for this client
     last_mutation_id = await sse_manager.get_client_mutation_id(user_id, client_id)
@@ -396,6 +443,8 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     
     # Create cookie with the correct lastMutationID
     cookie = create_cookie(user_id, client_id, cookie_last_mutation_id, client_name)
+    
+    logger.info(f"Push completed successfully. Returning response with cookie: {cookie}")
     
     return {
         "lastMutationIDChanges": last_mutation_id_changes,
