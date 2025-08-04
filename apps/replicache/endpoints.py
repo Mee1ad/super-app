@@ -283,15 +283,23 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     # Get current mutation ID changes for this user
     last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
     
-    # Create cookie with current state
-    cookie = create_cookie(user_id, client_id, last_mutation_id, client_name)
-    
     # Check if we have any changes to report
     has_changes = bool(last_mutation_id_changes) or bool(patch)
     
     # If no changes, return empty lastMutationIDChanges to avoid Replicache error
     if not has_changes:
         last_mutation_id_changes = {}
+        # Use the current last_mutation_id for the cookie when no changes
+        cookie_last_mutation_id = last_mutation_id
+    else:
+        # Find the highest mutation ID in the changes to ensure consistency
+        if last_mutation_id_changes:
+            cookie_last_mutation_id = max(last_mutation_id_changes.values())
+        else:
+            cookie_last_mutation_id = last_mutation_id
+    
+    # Create cookie with the correct lastMutationID
+    cookie = create_cookie(user_id, client_id, cookie_last_mutation_id, client_name)
     
     return {
         "lastMutationIDChanges": last_mutation_id_changes,
@@ -380,8 +388,14 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     # Get updated mutation ID changes for this user
     last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
     
-    # Create cookie with updated state
-    cookie = create_cookie(user_id, client_id, last_mutation_id, client_name)
+    # Find the highest mutation ID in the changes to ensure consistency
+    if last_mutation_id_changes:
+        cookie_last_mutation_id = max(last_mutation_id_changes.values())
+    else:
+        cookie_last_mutation_id = last_mutation_id
+    
+    # Create cookie with the correct lastMutationID
+    cookie = create_cookie(user_id, client_id, cookie_last_mutation_id, client_name)
     
     return {
         "lastMutationIDChanges": last_mutation_id_changes,

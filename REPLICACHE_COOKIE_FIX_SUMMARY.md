@@ -110,11 +110,23 @@ All tests pass successfully.
 ## Expected Response Format
 The endpoints now return responses in this format:
 
-**Pull Response:**
+**Pull Response (with changes):**
+```json
+{
+  "lastMutationIDChanges": {
+    "eimnisl70ujfs20tml": 1,
+    "fspaf9877po8e4pue3": 5
+  },
+  "cookie": "{\"lastMutationID\":5,\"timestamp\":1754242988212,\"userId\":\"user123\",\"clientId\":\"client456\",\"clientName\":\"todo-replicache-flat\"}",
+  "patch": []
+}
+```
+
+**Pull Response (no changes):**
 ```json
 {
   "lastMutationIDChanges": {},
-  "cookie": "{\"lastMutationID\":123,\"timestamp\":1703123456789,\"userId\":\"user123\",\"clientId\":\"client456\",\"clientName\":\"todo-replicache-flat\"}",
+  "cookie": "{\"lastMutationID\":0,\"timestamp\":1754242988212,\"userId\":\"user123\",\"clientId\":\"client456\",\"clientName\":\"todo-replicache-flat\"}",
   "patch": []
 }
 ```
@@ -123,9 +135,16 @@ The endpoints now return responses in this format:
 ```json
 {
   "lastMutationIDChanges": {"client456": 124},
-  "cookie": "{\"lastMutationID\":124,\"timestamp\":1703123456789,\"userId\":\"user123\",\"clientId\":\"client456\",\"clientName\":\"todo-replicache-flat\"}"
+  "cookie": "{\"lastMutationID\":124,\"timestamp\":1754242988212,\"userId\":\"user123\",\"clientId\":\"client456\",\"clientName\":\"todo-replicache-flat\"}"
 }
 ```
+
+## Key Fix: Cookie Consistency
+The most important fix was ensuring that the cookie's `lastMutationID` always matches the highest mutation ID in the `lastMutationIDChanges`:
+
+- **Before**: Cookie showed `lastMutationID: 0` but response included mutation IDs 1 and 5
+- **After**: Cookie shows `lastMutationID: 5` (the highest value) when there are changes
+- **Result**: Replicache no longer detects inconsistency and stops the infinite pull loop
 
 ## Benefits
 1. **Fixes the Replicache error** - No more "cookie null did not change, but lastMutationIDChanges is not empty"
@@ -137,5 +156,18 @@ The endpoints now return responses in this format:
 ## Files Modified
 - `apps/replicache/endpoints.py` - Added cookie functions and updated endpoints
 - `tests/test_replicache_cookie_sync.py` - Added comprehensive tests
+- `tests/test_replicache_cookie_consistency.py` - Added consistency tests
+
+## Additional Fix: SSE Stream Endpoint
+The SSE stream endpoint (`/api/v1/replicache/stream`) was also fixed:
+
+**Problem**: The endpoint was using the wrong `Response` class import, causing serialization errors:
+```
+ValueError: Object of type 'Response' is not JSON serializable
+```
+
+**Solution**: Fixed the import conflict by using only `esmerald.Response` instead of mixing with `fastapi.responses.Response`.
+
+**Result**: The SSE stream endpoint now works correctly and returns proper error messages for authentication issues.
 
 The fix ensures that Replicache's synchronization protocol is properly followed, eliminating the frontend error and providing robust state management. 
