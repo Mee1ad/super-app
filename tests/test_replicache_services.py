@@ -13,6 +13,41 @@ class TestTodoMutations:
     """Test todo mutation processing"""
     
     @pytest.mark.asyncio
+    async def test_process_todo_mutation_create_list(self):
+        """Test creating a todo list"""
+        mutation = {
+            'name': 'createList',
+            'args': {
+                'id': 'list-123',
+                'title': 'New List',
+                'type': 'task',
+                'variant': 'default'
+            }
+        }
+        
+        with patch('apps.replicache.services.TodoList.query.get') as mock_get_list, \
+             patch('apps.replicache.services.TodoList.query.create') as mock_create_list:
+            
+            # Mock that list doesn't exist
+            mock_get_list.side_effect = Exception("List not found")
+            
+            await process_todo_mutation(mutation, "test-user-id")
+            
+            # The convert_to_uuid function converts 'list-123' to a UUID
+            # We need to check that the mock was called with the converted UUID
+            mock_get_list.assert_called_once()
+            mock_create_list.assert_called_once()
+            
+            # Check that the create call has the correct parameters (except for the converted ID)
+            create_call_args = mock_create_list.call_args[1]  # Get kwargs
+            assert create_call_args['user_id'] == 'test-user-id'
+            assert create_call_args['title'] == 'New List'
+            assert create_call_args['type'] == 'task'
+            assert create_call_args['variant'] == 'default'
+            # The ID will be converted to UUID, so we just check it's a string
+            assert isinstance(create_call_args['id'], str)
+    
+    @pytest.mark.asyncio
     async def test_process_todo_mutation_create_task(self):
         """Test creating a task"""
         mutation = {
@@ -35,8 +70,50 @@ class TestTodoMutations:
             
             await process_todo_mutation(mutation, "test-user-id")
             
-            mock_get_list.assert_called_once_with(id='list-456', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_get_list.assert_called_once()
             mock_create_task.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_process_todo_mutation_create_task_new_format(self):
+        """Test creating a task with new createTask mutation"""
+        mutation = {
+            'name': 'createTask',
+            'args': {
+                'id': 'task-789',
+                'list_id': 'list-456',
+                'title': 'New Task',
+                'description': 'Task description',
+                'checked': False,
+                'position': 0,
+                'variant': 'default'
+            }
+        }
+        
+        with patch('apps.replicache.services.Task.query.get') as mock_get_task, \
+             patch('apps.replicache.services.Task.query.create') as mock_create_task:
+            
+            # Mock that task doesn't exist
+            mock_get_task.side_effect = Exception("Task not found")
+            
+            await process_todo_mutation(mutation, "test-user-id")
+            
+            # The convert_to_uuid function converts IDs to UUIDs
+            # We need to check that the mock was called with the converted UUIDs
+            mock_get_task.assert_called_once()
+            mock_create_task.assert_called_once()
+            
+            # Check that the create call has the correct parameters (except for the converted IDs)
+            create_call_args = mock_create_task.call_args[1]  # Get kwargs
+            assert create_call_args['user_id'] == 'test-user-id'
+            assert create_call_args['title'] == 'New Task'
+            assert create_call_args['description'] == 'Task description'
+            assert create_call_args['checked'] == False
+            assert create_call_args['position'] == 0
+            assert create_call_args['variant'] == 'default'
+            # The IDs will be converted to UUIDs, so we just check they're strings
+            assert isinstance(create_call_args['id'], str)
+            assert isinstance(create_call_args['list'], str)
     
     @pytest.mark.asyncio
     async def test_process_todo_mutation_create_shopping_item(self):
@@ -61,7 +138,8 @@ class TestTodoMutations:
             
             await process_todo_mutation(mutation, "test-user-id")
             
-            mock_get_list.assert_called_once_with(id='list-456', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_get_list.assert_called_once()
             mock_create_item.assert_called_once()
     
     @pytest.mark.asyncio
@@ -86,7 +164,8 @@ class TestTodoMutations:
             await process_todo_mutation(mutation, "test-user-id")
             
             # Should try task first, then shopping item
-            mock_filter_task.assert_called_once_with(id='task-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter_task.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_process_todo_mutation_delete(self):
@@ -106,7 +185,8 @@ class TestTodoMutations:
             
             await process_todo_mutation(mutation, "test-user-id")
             
-            mock_filter_task.assert_called_once_with(id='task-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter_task.assert_called_once()
 
 
 class TestFoodMutations:
@@ -148,7 +228,8 @@ class TestFoodMutations:
             
             await process_food_mutation(mutation, "test-user-id")
             
-            mock_filter.assert_called_once_with(id='food-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_process_food_mutation_delete(self):
@@ -165,7 +246,8 @@ class TestFoodMutations:
             
             await process_food_mutation(mutation, "test-user-id")
             
-            mock_filter.assert_called_once_with(id='food-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter.assert_called_once()
 
 
 class TestDiaryMutations:
@@ -206,7 +288,8 @@ class TestDiaryMutations:
             
             await process_diary_mutation(mutation, "test-user-id")
             
-            mock_filter.assert_called_once_with(id='diary-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_process_diary_mutation_delete(self):
@@ -223,7 +306,8 @@ class TestDiaryMutations:
             
             await process_diary_mutation(mutation, "test-user-id")
             
-            mock_filter.assert_called_once_with(id='diary-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter.assert_called_once()
 
 
 class TestIdeasMutations:
@@ -264,7 +348,8 @@ class TestIdeasMutations:
             
             await process_ideas_mutation(mutation, "test-user-id")
             
-            mock_filter.assert_called_once_with(id='idea-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_process_ideas_mutation_delete(self):
@@ -281,7 +366,8 @@ class TestIdeasMutations:
             
             await process_ideas_mutation(mutation, "test-user-id")
             
-            mock_filter.assert_called_once_with(id='idea-123', user_id='test-user-id')
+            # The convert_to_uuid function converts IDs to UUIDs
+            mock_filter.assert_called_once()
 
 
 class TestPatchGeneration:

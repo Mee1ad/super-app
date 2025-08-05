@@ -41,7 +41,81 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
     logger.info(f"Processing todo mutation: {mutation_name} with args: {args}")
     
     try:
-        if mutation_name == 'createItem':
+        if mutation_name == 'createList':
+            # Create new todo list
+            list_id = convert_to_uuid(args.get('id', str(uuid4())), mutation_index)
+            title = args.get('title', '')
+            list_type = args.get('type', 'task')
+            variant = args.get('variant', 'default')
+            
+            logger.info(f"Creating todo list: id={list_id}, title='{title}', type={list_type}, variant={variant}")
+            
+            # Check if list already exists
+            try:
+                existing_list = await TodoList.query.get(id=list_id, user_id=user_id)
+                if existing_list:
+                    logger.warning(f"TodoList with id {list_id} already exists, skipping creation")
+                    return
+            except Exception as e:
+                logger.info(f"List not found, proceeding with creation: {e}")
+            
+            try:
+                await TodoList.query.create(
+                    id=list_id,
+                    user_id=user_id,
+                    title=title,
+                    type=list_type,
+                    variant=variant
+                )
+                logger.info(f"Successfully created TodoList: {list_id}")
+            except Exception as e:
+                if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
+                    logger.warning(f"TodoList with id {list_id} already exists, skipping creation")
+                else:
+                    logger.error(f"Error creating TodoList: {e}")
+                    raise
+                    
+        elif mutation_name == 'createTask':
+            # Create new todo task
+            task_id = convert_to_uuid(args.get('id', str(uuid4())), mutation_index)
+            list_id = convert_to_uuid(args.get('list_id'), mutation_index) if args.get('list_id') else None
+            title = args.get('title', '')
+            description = args.get('description')
+            checked = args.get('checked', False)
+            position = args.get('position', 0)
+            variant = args.get('variant', 'default')
+            
+            logger.info(f"Creating todo task: id={task_id}, list_id={list_id}, title='{title}', description='{description}', checked={checked}, position={position}, variant={variant}")
+            
+            # Check if task already exists
+            try:
+                existing_task = await Task.query.get(id=task_id, user_id=user_id)
+                if existing_task:
+                    logger.warning(f"Task with id {task_id} already exists, skipping creation")
+                    return
+            except Exception as e:
+                logger.info(f"Task not found, proceeding with creation: {e}")
+            
+            try:
+                await Task.query.create(
+                    id=task_id,
+                    user_id=user_id,
+                    list=list_id,
+                    title=title,
+                    description=description,
+                    checked=checked,
+                    position=position,
+                    variant=variant
+                )
+                logger.info(f"Successfully created Task: {task_id}")
+            except Exception as e:
+                if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
+                    logger.warning(f"Task with id {task_id} already exists, skipping creation")
+                else:
+                    logger.error(f"Error creating Task: {e}")
+                    raise
+                    
+        elif mutation_name == 'createItem':
             # Create new todo item
             item_id = convert_to_uuid(args.get('id', str(uuid4())), mutation_index)
             list_id = convert_to_uuid(args.get('listId'), mutation_index) if args.get('listId') else None

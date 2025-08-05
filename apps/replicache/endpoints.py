@@ -349,7 +349,7 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
                 else:
                     client_name = 'diary-replicache'
                     logger.info(f"Detected diary-replicache based on mutation: {first_mutation_name}")
-            elif first_mutation_name in ['createItem', 'updateItem', 'deleteItem']:
+            elif first_mutation_name in ['createItem', 'updateItem', 'deleteItem', 'createList', 'createTask']:
                 client_name = 'todo-replicache-flat'
                 logger.info(f"Detected todo-replicache-flat based on mutation: {first_mutation_name}")
             elif first_mutation_name in ['createIdea', 'updateIdea', 'deleteIdea']:
