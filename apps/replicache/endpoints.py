@@ -1,4 +1,5 @@
 from esmerald import Request, Response, get, post, HTTPException, status
+from starlette.responses import StreamingResponse
 from typing import Dict, Set, Any, Optional, Tuple
 import asyncio
 import json
@@ -182,26 +183,43 @@ async def sse_stream(request: Request) -> Response:
         user_id = str(user.id)
         
         # Create queue for this client with larger size
-        queue = asyncio.Queue(maxsize=100)
-        
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
+
         # Register client
         await sse_manager.add_client(user_id, queue)
-        
+
         logger.info(f"SSE stream started for user {user_id}")
-        
-        # For now, return a simple response to test if the endpoint works
-        # We'll implement proper streaming later
-        await sse_manager.remove_client(user_id, queue)
-        
-        return Response(
-            content="data: connected\n\n",
+
+        async def event_generator():
+            # Initial connected message
+            yield "data: connected\n\n"
+            try:
+                while True:
+                    # Periodic keepalive and queued messages
+                    try:
+                        message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                        yield f"data: {message}\n\n"
+                    except asyncio.TimeoutError:
+                        yield "data: ping\n\n"
+                    # Stop if client disconnected
+                    try:
+                        if await request.is_disconnected():
+                            break
+                    except Exception:
+                        # If API not available, continue
+                        pass
+            finally:
+                await sse_manager.remove_client(user_id, queue)
+
+        return StreamingResponse(
+            event_generator(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control"
-            }
+                "Access-Control-Allow-Headers": "Cache-Control",
+            },
         )
     
     except HTTPException as e:
@@ -219,23 +237,32 @@ async def sse_stream(request: Request) -> Response:
     description="Notify all connected clients for a specific user"
 )
 async def poke_user(request: Request) -> Dict[str, Any]:
-    """Trigger user-specific sync notification"""
+    """Trigger user-specific sync notification.
+    Optional query param userId allows targeting the current authenticated user explicitly.
+    """
     try:
         user = await get_current_user_dependency(request)
-        user_id = str(user.id)
-        logger.info(f"Poke request for user: {user_id}")
+        authed_user_id = str(user.id)
+        target_user_id = request.query_params.get('userId') if hasattr(request, 'query_params') else None  # type: ignore[attr-defined]
+        target_user_id = target_user_id or authed_user_id
+
+        if target_user_id != authed_user_id:
+            # For now, only allow poking self without an admin model
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+        logger.info(f"Poke request for user: {target_user_id}")
         
         # Notify user's clients
-        notified_count = await sse_manager.notify_user(user_id, "sync")
+        notified_count = await sse_manager.notify_user(target_user_id, "sync")
         
         result = {
             "success": True,
-            "userId": user_id,
+            "userId": target_user_id,
             "clientsNotified": notified_count,
             "message": "User-specific sync triggered",
             "timestamp": datetime.utcnow().isoformat()
         }
-        logger.info(f"Poke successful for user {user_id}: {result}")
+        logger.info(f"Poke successful for user {target_user_id}: {result}")
         return result
     
     except HTTPException:
@@ -346,18 +373,17 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     
     # Import services
     from apps.replicache.services import (
-        get_todo_patch, get_food_patch, get_diary_patch, get_ideas_patch
+        get_todo_delta, get_todo_patch, get_food_patch, get_diary_patch, get_ideas_patch
     )
     
     # Prefer namespace routing when provided
     if ns == 'todo':
-        # If cookie present, use its lastMutationID to optionally scope to deltas in future
+        # Delta by cv cookie when available; default to 0
         try:
-            since_lmid = int((parsed_cookie or {}).get('lastMutationID', 0))
+            client_cv = int((parsed_cookie or {}).get('cv', 0))
         except Exception:
-            since_lmid = 0
-        # For now, return full snapshot every pull per instruction
-        patch = await get_todo_patch(user_id)
+            client_cv = 0
+        patch, max_cv = await get_todo_delta(user_id, since_cv=client_cv)
     elif ns == 'food':
         patch = await get_food_patch(user_id)
     elif ns == 'diary':
@@ -367,7 +393,7 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     else:
         # Fallback to legacy client name routing
         if client_name == 'todo-replicache-flat':
-            patch = await get_todo_patch(user_id)
+            patch, max_cv = await get_todo_delta(user_id, since_cv=0)
         elif client_name == 'food-tracker-replicache':
             patch = await get_food_patch(user_id)
         elif client_name == 'diary-replicache':
@@ -377,15 +403,20 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
         else:
             logger.warning(f"Unknown client name: '{client_name}' and ns '{ns}'")
             patch = []
+            max_cv = (parsed_cookie or {}).get('cv', 0) if parsed_cookie else 0
     
     # Compute canonical cookie. Use the caller's current lastMutationID and current timestamp
-    computed_cookie = json.dumps({
+    cookie_payload = {
         "lastMutationID": last_mutation_id,
         "clientID": caller_client_id,
         "clientGroupID": client_group_id,
         "ns": ns,
         "ts": int(time.time() * 1000),
-    })
+    }
+    # Include cv when we computed deltas for todo
+    if ns == 'todo':
+        cookie_payload["cv"] = int(max_cv)
+    computed_cookie = json.dumps(cookie_payload)
 
     # If cookie unchanged, return with empty patch and unchanged lastMutationIDChanges
     if incoming_cookie and parsed_cookie and incoming_cookie == computed_cookie:
@@ -398,7 +429,7 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     return {
         "lastMutationIDChanges": {caller_client_id: last_mutation_id},
         "cookie": computed_cookie,
-        "patch": patch
+        "patch": patch,
     }
 
 # Replicache push

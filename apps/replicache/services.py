@@ -5,6 +5,7 @@ from uuid import uuid4
 import hashlib
 
 from apps.todo.models import List as TodoList, Task, ShoppingItem
+from db.session import database
 from apps.food_tracker.models import FoodEntry
 from apps.diary.models import DiaryEntry
 from apps.ideas.models import Idea
@@ -12,6 +13,49 @@ from apps.ideas.models import Idea
 logger = logging.getLogger(__name__)
 
 def convert_to_uuid(id_str: str, mutation_index: int = 0) -> str:
+async def next_cv(ns: str) -> int:
+    """Get next change version for a namespace.
+    Uses PostgreSQL sequence when available, otherwise increments row in replicache_cv.
+    """
+    try:
+        # Detect dialect by trying to use a Postgres-specific function. Safer: check driver via SELECT version
+        # We rely on our migration manager dialect choice by probing for sequence
+        if ns == 'todo':
+            # Try Postgres sequence first
+            try:
+                row = await database.fetch_one("SELECT nextval('todo_cv_seq')")
+                if row is not None:
+                    return int(row[0])
+            except Exception:
+                pass
+        # Fallback: atomic increment in replicache_cv table
+        await database.execute(
+            """
+            INSERT INTO replicache_cv(ns, value)
+            VALUES (:ns, 1)
+            ON CONFLICT(ns) DO UPDATE SET value = replicache_cv.value + 1
+            """,
+            {"ns": ns},
+        )
+        row = await database.fetch_one(
+            "SELECT value FROM replicache_cv WHERE ns = :ns", {"ns": ns}
+        )
+        return int(row[0]) if row else 1
+    except Exception:
+        # As a last resort, return a timestamp-based cv (not ideal but prevents crashes)
+        from datetime import datetime
+        return int(datetime.now().timestamp() * 1000)
+
+async def write_tombstone(ns: str, user_id: str, key: str, cv: int) -> None:
+    table = f"{ns}_tombstones"
+    await database.execute(
+        f"""
+        INSERT INTO {table} (user_id, key, cv)
+        VALUES (:user_id, :key, :cv)
+        ON CONFLICT (user_id, key) DO UPDATE SET cv = EXCLUDED.cv
+        """,
+        {"user_id": user_id, "key": key, "cv": cv},
+    )
     """Convert any string ID to a valid UUID using hash, with index to ensure uniqueness"""
     if not id_str:
         return str(uuid4())
@@ -70,12 +114,15 @@ async def process_todo_mutation(
                 logger.info(f"List not found, proceeding with creation: {e}")
             
             try:
+                # Stamp cv at write time (monotonic per ns)
+                cv_value = await next_cv('todo')
                 await TodoList.query.create(
                     id=list_id,
                     user_id=user_id,
                     title=title,
                     type=list_type,
-                    variant=variant
+                    variant=variant,
+                    cv=cv_value
                 )
                 logger.info(f"Successfully created TodoList: {list_id}")
             except Exception as e:
@@ -112,6 +159,7 @@ async def process_todo_mutation(
                 logger.info(f"Task not found, proceeding with creation: {e}")
             
             try:
+                cv_value = await next_cv('todo')
                 await Task.query.create(
                     id=task_id,
                     user_id=user_id,
@@ -120,7 +168,8 @@ async def process_todo_mutation(
                     description=description,
                     checked=checked,
                     position=position,
-                    variant=variant
+                    variant=variant,
+                    cv=cv_value
                 )
                 logger.info(f"Successfully created Task: {task_id}")
             except Exception as e:
@@ -161,8 +210,8 @@ async def process_todo_mutation(
                     logger.info(f"Item not found, proceeding with creation")
             
             # Determine if it's a task or shopping item based on list type
-            try:
-                list_obj = await TodoList.query.get(id=list_id, user_id=user_id)
+                try:
+                    list_obj = await TodoList.query.get(id=list_id, user_id=user_id)
                 logger.info(f"Found list: {list_obj.type}")
             except Exception as e:
                 logger.error(f"List not found: {list_id} for user {user_id}, error: {e}")
@@ -172,13 +221,15 @@ async def process_todo_mutation(
             if list_obj.type == 'task':
                 logger.info(f"Creating Task with id: {item_id}")
                 try:
+                    cv_value = await next_cv('todo')
                     await Task.query.create(
                         id=item_id,
                         user_id=user_id,
                         list=list_id,
                         title=title,
                         checked=completed,
-                        position=order
+                        position=order,
+                        cv=cv_value
                     )
                     logger.info(f"Successfully created Task: {item_id}")
                 except Exception as e:
@@ -195,13 +246,15 @@ async def process_todo_mutation(
             else:  # shopping
                 logger.info(f"Creating ShoppingItem with id: {item_id}")
                 try:
+                    cv_value = await next_cv('todo')
                     await ShoppingItem.query.create(
                         id=item_id,
                         user_id=user_id,
                         list=list_id,
                         title=title,
                         checked=completed,
-                        position=order
+                        position=order,
+                        cv=cv_value
                     )
                     logger.info(f"Successfully created ShoppingItem: {item_id}")
                 except Exception as e:
@@ -228,13 +281,18 @@ async def process_todo_mutation(
             
             logger.info(f"Updates to apply: {updates}")
             
+            # Update cv for changed rows
+            cv_value = await next_cv('todo')
+            updates_with_cv = dict(updates)
+            updates_with_cv['cv'] = cv_value
+
             # Try to update as task first, then shopping item
             try:
-                await Task.query.filter(id=item_id, user_id=user_id).update(**updates)
+                await Task.query.filter(id=item_id, user_id=user_id).update(**updates_with_cv)
                 logger.info(f"Successfully updated Task: {item_id}")
             except Exception as e:
                 logger.info(f"Task update failed, trying ShoppingItem: {e}")
-                await ShoppingItem.query.filter(id=item_id, user_id=user_id).update(**updates)
+                await ShoppingItem.query.filter(id=item_id, user_id=user_id).update(**updates_with_cv)
                 logger.info(f"Successfully updated ShoppingItem: {item_id}")
             # Set row version to latest mutation id if column exists
             try:
@@ -248,6 +306,10 @@ async def process_todo_mutation(
             
             logger.info(f"Deleting todo item: id={item_id}")
             
+            # Generate new cv and write tombstone
+            cv_value = await next_cv('todo')
+            await write_tombstone('todo', user_id, f"task/{item_id}", cv_value)
+
             # Try to delete as task first, then shopping item
             try:
                 await Task.query.filter(id=item_id, user_id=user_id).delete()
@@ -256,18 +318,54 @@ async def process_todo_mutation(
                 logger.info(f"Task delete failed, trying ShoppingItem: {e}")
                 await ShoppingItem.query.filter(id=item_id, user_id=user_id).delete()
                 logger.info(f"Successfully deleted ShoppingItem: {item_id}")
+
+        elif mutation_name == 'deleteTask':
+            task_id = convert_to_uuid(args.get('id'), mutation_index)
+            # Tombstone
+            cv_value = await next_cv('todo')
+            await write_tombstone('todo', user_id, f"task/{task_id}", cv_value)
+            await Task.query.filter(id=task_id, user_id=user_id).delete()
+            logger.info(f"Successfully deleted Task: {task_id}")
+
+        elif mutation_name == 'deleteList':
+            list_id = convert_to_uuid(args.get('id'), mutation_index)
+            # Tombstone for list and its children
+            cv_value = await next_cv('todo')
+            await write_tombstone('todo', user_id, f"list/{list_id}", cv_value)
+            # Tombstone each child task/item with same cv or subsequent? Use same cv for monotonic fairness
+            try:
+                tasks = await Task.query.filter(user_id=user_id, list=list_id).all()
+            except Exception:
+                tasks = []
+            for t in tasks:
+                await write_tombstone('todo', user_id, f"task/{t.id}", cv_value)
+            try:
+                items = await ShoppingItem.query.filter(user_id=user_id, list=list_id).all()
+            except Exception:
+                items = []
+            for it in items:
+                await write_tombstone('todo', user_id, f"item/{it.id}", cv_value)
+            # Delete children then list
+            await Task.query.filter(user_id=user_id, list=list_id).delete()
+            await ShoppingItem.query.filter(user_id=user_id, list=list_id).delete()
+            await TodoList.query.filter(id=list_id, user_id=user_id).delete()
+            logger.info(f"Successfully deleted List and children: {list_id}")
                 
     except Exception as e:
         logger.error(f"Error processing todo mutation {mutation_name}: {e}", exc_info=True)
         raise
 
-async def get_todo_patch(user_id: str) -> List[Dict[str, Any]]:
-    """Get todo data for todo-replicache-flat client"""
+async def get_todo_delta(user_id: str, since_cv: int) -> tuple[List[Dict[str, Any]], int]:
+    """Get delta since given cv. Returns (patch, max_cv). If since_cv == 0, returns full snapshot and max_cv."""
     try:
-        patch = []
-        
-        # Get all lists
-        lists = await TodoList.query.filter(user_id=user_id).all()
+        patch: List[Dict[str, Any]] = []
+        max_cv = since_cv
+
+        # Lists delta
+        if since_cv > 0:
+            lists = await TodoList.query.filter(user_id=user_id, cv__gt=since_cv).order_by("cv").all()
+        else:
+            lists = await TodoList.query.filter(user_id=user_id).all()
         for list_obj in lists:
             patch.append({
                 "op": "put",
@@ -279,9 +377,16 @@ async def get_todo_patch(user_id: str) -> List[Dict[str, Any]]:
                     "variant": list_obj.variant
                 }
             })
+            try:
+                max_cv = max(max_cv, int(getattr(list_obj, 'cv', 0) or 0))
+            except Exception:
+                pass
         
-        # Get all tasks
-        tasks = await Task.query.filter(user_id=user_id).all()
+        # Tasks delta
+        if since_cv > 0:
+            tasks = await Task.query.filter(user_id=user_id, cv__gt=since_cv).order_by("cv").all()
+        else:
+            tasks = await Task.query.filter(user_id=user_id).all()
         for task in tasks:
             patch.append({
                 "op": "put",
@@ -296,9 +401,16 @@ async def get_todo_patch(user_id: str) -> List[Dict[str, Any]]:
                     "variant": task.variant
                 }
             })
+            try:
+                max_cv = max(max_cv, int(getattr(task, 'cv', 0) or 0))
+            except Exception:
+                pass
         
-        # Get all shopping items
-        items = await ShoppingItem.query.filter(user_id=user_id).all()
+        # Shopping items delta
+        if since_cv > 0:
+            items = await ShoppingItem.query.filter(user_id=user_id, cv__gt=since_cv).order_by("cv").all()
+        else:
+            items = await ShoppingItem.query.filter(user_id=user_id).all()
         for item in items:
             patch.append({
                 "op": "put",
@@ -315,8 +427,38 @@ async def get_todo_patch(user_id: str) -> List[Dict[str, Any]]:
                     "variant": item.variant
                 }
             })
+            try:
+                max_cv = max(max_cv, int(getattr(item, 'cv', 0) or 0))
+            except Exception:
+                pass
+
+        # Tombstones for deletions (only for delta)
+        if since_cv > 0:
+            rows = await database.fetch_all(
+                """
+                SELECT key, cv FROM todo_tombstones
+                WHERE user_id = :user_id AND cv > :cv
+                ORDER BY cv
+                """,
+                {"user_id": user_id, "cv": since_cv},
+            )
+            for row in rows:
+                patch.append({"op": "del", "key": row[0]})
+                try:
+                    max_cv = max(max_cv, int(row[1]))
+                except Exception:
+                    pass
         
-        return patch
+        return patch, max_cv
+    except Exception as e:
+        logger.error(f"Error getting todo delta: {e}")
+        return [], since_cv
+
+
+async def get_todo_patch(user_id: str) -> List[Dict[str, Any]]:
+    """Get full todo snapshot for todo-replicache-flat client (compat API)."""
+    patch, _ = await get_todo_delta(user_id, since_cv=0)
+    return patch
         
     except Exception as e:
         logger.error(f"Error getting todo patch: {e}")

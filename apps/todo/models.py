@@ -34,6 +34,8 @@ class List(UUIDBaseModel):
         default=Variant.DEFAULT,
         max_length=20
     )
+    # Replicache change version for delta pulls
+    cv: fields.IntegerField = fields.IntegerField(default=0)
 
     class Meta:
         tablename = "lists"
@@ -59,6 +61,8 @@ class Task(UUIDBaseModel):
         max_length=20
     )
     position: fields.IntegerField = fields.IntegerField(default=0)
+    # Replicache change version for delta pulls
+    cv: fields.IntegerField = fields.IntegerField(default=0)
 
     class Meta:
         tablename = "tasks"
@@ -86,6 +90,8 @@ class ShoppingItem(UUIDBaseModel):
         max_length=20
     )
     position: fields.IntegerField = fields.IntegerField(default=0)
+    # Replicache change version for delta pulls
+    cv: fields.IntegerField = fields.IntegerField(default=0)
 
     class Meta:
         tablename = "shopping_items"

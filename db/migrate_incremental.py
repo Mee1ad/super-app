@@ -20,6 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db.session import database
 from db.migrations.base import migration_manager, Migration
 from core.config import settings
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -31,38 +32,50 @@ logger = logging.getLogger(__name__)
 
 def register_migrations():
     """Register all migrations with the migration manager"""
-    # Import migrations dynamically to avoid import issues
     try:
-        # Import migration modules
+        # Discover migration modules under db/migrations
+        migrations_dir = Path(__file__).resolve().parent / "migrations"
+        migration_paths = sorted(
+            [p for p in migrations_dir.glob("*.py") if p.name not in {"base.py", "__init__.py"}],
+            key=lambda p: p.name,
+        )
+
         import importlib.util
-        
-        migration_files = [
-            "backend/db/migrations/001_initial_schema_consolidated.py",
-            "backend/db/migrations/003_increase_image_url_length.py",
-            "backend/db/migrations/004_replicache_state.py",
-            "backend/db/migrations/005_todo_row_versions.py",
-        ]
-        
-        for migration_file in migration_files:
-            if os.path.exists(migration_file):
-                spec = importlib.util.spec_from_file_location("migration", migration_file)
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                
-                # Find the migration class in the module
-                for attr_name in dir(module):
-                    attr = getattr(module, attr_name)
-                    if (isinstance(attr, type) and 
-                        issubclass(attr, Migration) and 
-                        attr != Migration):
-                        migration_instance = attr()
-                        migration_manager.register_migration(migration_instance)
-                        logger.info(f"✅ Registered migration: {migration_instance.get_version()}")
-                        break
-        
+
+        before = len(migration_manager.migrations)
+        for migration_file in migration_paths:
+            pre_count = len(migration_manager.migrations)
+            spec = importlib.util.spec_from_file_location(
+                f"migration_{migration_file.stem}", str(migration_file)
+            )
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                # If module did not self-register, register by scanning for class
+                if len(migration_manager.migrations) == pre_count:
+                    for attr_name in dir(module):
+                        attr = getattr(module, attr_name)
+                        if (
+                            isinstance(attr, type)
+                            and issubclass(attr, Migration)
+                            and attr is not Migration
+                        ):
+                            migration_instance = attr()
+                            migration_manager.register_migration(migration_instance)
+                            break
+
+        # De-duplicate by version to avoid double-registration
+        unique_by_version = {}
+        for m in migration_manager.migrations:
+            unique_by_version[m.get_version()] = m
+        # Rebuild list sorted by version
+        migration_manager.migrations = sorted(
+            unique_by_version.values(), key=lambda m: m.get_version()
+        )
+
         logger.info(f"✅ Registered {len(migration_manager.migrations)} migrations")
-        
+
     except Exception as e:
         logger.error(f"❌ Error registering migrations: {e}")
         raise

@@ -1,13 +1,25 @@
 import logging
 from typing import Any
-from edgy import Migration
+from db.migrations.base import Migration
 
 logger = logging.getLogger(__name__)
 
 
 class IncreaseImageUrlLengthMigration(Migration):
-    """Migration to increase image_url field length for base64 data support"""
-    
+    """Migration 003: increase image_url field length for base64 data support"""
+
+    def get_version(self) -> str:
+        return "003"
+
+    def get_name(self) -> str:
+        return "increase_image_url_length"
+
+    def get_description(self) -> str:
+        return "Increase image_url column length in food_entries to 10000"
+
+    def get_dependencies(self) -> list[str]:
+        return ["001", "002"]
+
     async def up(self) -> None:
         """Increase image_url field length"""
         logger.info("🔄 Increasing image_url field length...")
