@@ -38,7 +38,8 @@ def register_migrations():
         
         migration_files = [
             "backend/db/migrations/001_initial_schema_consolidated.py",
-            "backend/db/migrations/003_increase_image_url_length.py"
+            "backend/db/migrations/003_increase_image_url_length.py",
+            "backend/db/migrations/004_replicache_state.py",
         ]
         
         for migration_file in migration_files:

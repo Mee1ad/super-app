@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import time
 
 from edgy import Database
+from db.session import database
+from core.config import settings
 
 from core.dependencies import get_current_user_dependency
 
@@ -308,8 +310,17 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
         if parsed_cookie:
             logger.info(f"Parsed incoming cookie: {parsed_cookie}")
     
-    # Resolve caller clientID using last-seen map if needed
-    caller_client_id = explicit_client_id or await sse_manager.get_last_seen_client(ns, profile_id, client_group_id)
+    # Resolve caller clientID using DB last-seen map if needed
+    caller_client_id = explicit_client_id
+    if not caller_client_id:
+        row = await database.fetch_one(
+            """
+            SELECT client_id FROM replicache_last_seen
+            WHERE ns = :ns AND profile_id = :profile_id AND client_group_id = :client_group_id
+            """,
+            {"ns": ns, "profile_id": profile_id, "client_group_id": client_group_id},
+        )
+        caller_client_id = row[0] if row else None
     if not caller_client_id:
         # Unknown caller: return cookie with current timestamp and empty patch/no changes
         unknown_cookie = json.dumps({
@@ -321,9 +332,16 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
             "patch": []
         }
 
-    # Get the caller client's current lastMutationID and the group's last change ts
-    last_mutation_id = await sse_manager.get_last_mutation_id_by_client(ns, caller_client_id)
-    group_ts = await sse_manager.get_group_ts(ns, profile_id, client_group_id)
+    # Get the caller client's current lastMutationID from DB and group ts (use current time for cookie)
+    row = await database.fetch_one(
+        """
+        SELECT last_mutation_id FROM replicache_client_state
+        WHERE ns = :ns AND client_id = :client_id
+        """,
+        {"ns": ns, "client_id": caller_client_id},
+    )
+    last_mutation_id = int(row[0]) if row else 0
+    group_ts = int(time.time() * 1000)
     logger.info(f"Caller client {caller_client_id} last mutation ID: {last_mutation_id}, group ts: {group_ts}")
     
     # Import services
@@ -471,56 +489,110 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
         process_diary_mutation, process_ideas_mutation
     )
     
-    # Book-keeping: record last seen client for (profileID, clientGroupID) and group membership
+    # Book-keeping in memory for SSE
     await sse_manager.set_last_seen_client(ns, profile_id, client_group_id, client_id)
 
-    # Implement idempotent apply and per-client lastMutationID tracking
-    current_last_mutation_id = await sse_manager.get_last_mutation_id_by_client(ns, client_id)
-    logger.info(f"Starting push with current lastMutationID={current_last_mutation_id} for client {client_id}")
+    # Implement transactional idempotent apply with DB source of truth
+    is_sqlite = settings.get_database_url().startswith("sqlite")
+    now_ts = datetime.now(timezone.utc)
 
-    # Process in ascending id order to be robust to reordering
-    def _mid(m: dict) -> int:
-        try:
-            return int(m.get('id', 0))
-        except Exception:
-            return 0
+    async with database.transaction():
+        # Ensure client state row exists and lock for update when supported
+        if is_sqlite:
+            row = await database.fetch_one(
+                "SELECT last_mutation_id FROM replicache_client_state WHERE ns = :ns AND client_id = :client_id",
+                {"ns": ns, "client_id": client_id},
+            )
+        else:
+            row = await database.fetch_one(
+                "SELECT last_mutation_id FROM replicache_client_state WHERE ns = :ns AND client_id = :client_id FOR UPDATE",
+                {"ns": ns, "client_id": client_id},
+            )
+        current_last_mutation_id = int(row[0]) if row else 0
+        if not row:
+            # Insert initial row
+            await database.execute(
+                """
+                INSERT INTO replicache_client_state (ns, client_id, last_mutation_id, updated_at)
+                VALUES (:ns, :client_id, :lmid, :updated_at)
+                ON CONFLICT(ns, client_id) DO NOTHING
+                """,
+                {"ns": ns, "client_id": client_id, "lmid": 0, "updated_at": now_ts},
+            )
 
-    for i, mutation in enumerate(sorted(mutations, key=_mid)):
-        mutation_name = mutation.get('name', '')
-        mutation_id = mutation.get('id')
-        args = mutation.get('args', {})
+        # Process in ascending id order to be robust to reordering
+        def _mid(m: dict) -> int:
+            try:
+                return int(m.get('id', 0))
+            except Exception:
+                return 0
 
-        if mutation_id is None:
-            logger.warning(f"Skipping mutation without id at index {i}: {mutation}")
-            continue
+        for i, mutation in enumerate(sorted(mutations, key=_mid)):
+            mutation_name = mutation.get('name', '')
+            mutation_id = mutation.get('id')
+            args = mutation.get('args', {})
 
-        if int(mutation_id) <= int(current_last_mutation_id):
-            logger.info(f"Skipping already-applied mutation id={mutation_id} (<= {current_last_mutation_id})")
-            continue
+            if mutation_id is None:
+                logger.warning(f"Skipping mutation without id at index {i}: {mutation}")
+                continue
 
-        logger.info(f"Applying mutation {i+1}/{len(mutations)}: id={mutation_id} name={mutation_name} args={args}")
+            if int(mutation_id) <= int(current_last_mutation_id):
+                logger.info(f"Skipping already-applied mutation id={mutation_id} (<= {current_last_mutation_id})")
+                continue
 
-        try:
-            # Route by client name instead of mutation prefix
-            if client_name == 'todo-replicache-flat':
-                await process_todo_mutation(mutation, user_id, i)
-            elif client_name == 'food-tracker-replicache':
-                await process_food_mutation(mutation, user_id, i)
-            elif client_name == 'diary-replicache':
-                await process_diary_mutation(mutation, user_id, i)
-            elif client_name == 'ideas-replicache':
-                await process_ideas_mutation(mutation, user_id, i)
-            else:
-                logger.warning(f"Unknown client name: '{client_name}'")
+            logger.info(f"Applying mutation {i+1}/{len(mutations)}: id={mutation_id} name={mutation_name} args={args}")
 
-            # On success, advance lastMutationID
-            current_last_mutation_id = int(mutation_id)
-            await sse_manager.update_client_mutation_id(user_id, ns, client_id, current_last_mutation_id)
-            logger.info(f"Advanced lastMutationID to {current_last_mutation_id} for client {client_id}")
+            # Route by client name or namespace
+            try:
+                if ns == 'todo' or client_name == 'todo-replicache-flat':
+                    await process_todo_mutation(mutation, user_id, i)
+                elif ns == 'food' or client_name == 'food-tracker-replicache':
+                    await process_food_mutation(mutation, user_id, i)
+                elif ns == 'diary' or client_name == 'diary-replicache':
+                    await process_diary_mutation(mutation, user_id, i)
+                elif ns == 'ideas' or client_name == 'ideas-replicache':
+                    await process_ideas_mutation(mutation, user_id, i)
+                else:
+                    logger.warning(f"Unknown client namespace/name: ns='{ns}', name='{client_name}'")
 
-        except Exception as e:
-            logger.error(f"Error processing mutation {mutation_name}: {e}", exc_info=True)
-            raise
+                # On success, advance lastMutationID and persist immediately
+                current_last_mutation_id = int(mutation_id)
+                await database.execute(
+                    """
+                    UPDATE replicache_client_state
+                    SET last_mutation_id = :lmid, updated_at = :updated_at
+                    WHERE ns = :ns AND client_id = :client_id
+                    """,
+                    {
+                        "lmid": current_last_mutation_id,
+                        "updated_at": now_ts,
+                        "ns": ns,
+                        "client_id": client_id,
+                    },
+                )
+                await sse_manager.update_client_mutation_id(user_id, ns, client_id, current_last_mutation_id)
+                logger.info(f"Advanced lastMutationID to {current_last_mutation_id} for client {client_id}")
+
+            except Exception as e:
+                logger.error(f"Error processing mutation {mutation_name}: {e}", exc_info=True)
+                raise
+
+        # Upsert last_seen mapping
+        await database.execute(
+            """
+            INSERT INTO replicache_last_seen (ns, profile_id, client_group_id, client_id, updated_at)
+            VALUES (:ns, :profile_id, :client_group_id, :client_id, :updated_at)
+            ON CONFLICT(ns, profile_id, client_group_id)
+            DO UPDATE SET client_id = EXCLUDED.client_id, updated_at = EXCLUDED.updated_at
+            """,
+            {
+                "ns": ns,
+                "profile_id": profile_id,
+                "client_group_id": client_group_id,
+                "client_id": client_id,
+                "updated_at": now_ts,
+            },
+        )
     
     # Update version
     sse_manager.user_versions[user_id] = sse_manager.user_versions.get(user_id, 0) + 1

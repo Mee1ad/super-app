@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # Database Configuration (all from env)
     db_host: str = os.getenv("DB_HOST", "localhost")
     db_port: int = int(os.getenv("DB_PORT", 5432))
-    db_name: str = os.getenv("DB_NAME", "postgres")
+    db_name: str = os.getenv("DB_NAME", "superapp")
     db_user: str = os.getenv("DB_USER", "postgres")
     db_password: str = os.getenv("DB_PASSWORD", "admin")
 
