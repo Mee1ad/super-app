@@ -21,7 +21,7 @@ class TestReplicachePull:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'todo-replicache-flat'},
-            'lastPulledVersion': 0
+            'clientID': 'c-todo-1',
         }
         
         # Mock user dependency
@@ -36,9 +36,15 @@ class TestReplicachePull:
             ]
             
             result = await replicache_pull(request)
-            
-            assert result["lastMutationID"] == 0
-            assert result["cookie"] is None
+
+            # cookie should be a JSON string that includes clientID and lastMutationID
+            assert isinstance(result["cookie"], str)
+            cookie = json.loads(result["cookie"])
+            assert cookie["clientID"] == 'c-todo-1'
+            assert cookie["lastMutationID"] == 0
+            assert "ts" in cookie
+            # changes map keyed by clientID
+            assert isinstance(result["lastMutationIDChanges"], dict)
             assert len(result["patch"]) == 1
             assert result["patch"][0]["key"] == "list/123"
             mock_get_todo.assert_called_once_with("test-user-id")
@@ -49,7 +55,7 @@ class TestReplicachePull:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'food-tracker-replicache'},
-            'lastPulledVersion': 0
+            'clientID': 'c-food-1',
         }
         
         user = AsyncMock()
@@ -63,9 +69,13 @@ class TestReplicachePull:
             ]
             
             result = await replicache_pull(request)
-            
-            assert result["lastMutationID"] == 0
-            assert result["cookie"] is None
+
+            assert isinstance(result["cookie"], str)
+            cookie = json.loads(result["cookie"])
+            assert cookie["clientID"] == 'c-food-1'
+            assert cookie["lastMutationID"] == 0
+            assert "ts" in cookie
+            assert isinstance(result["lastMutationIDChanges"], dict)
             assert len(result["patch"]) == 1
             assert result["patch"][0]["key"] == "food-entry/456"
             mock_get_food.assert_called_once_with("test-user-id")
@@ -76,7 +86,7 @@ class TestReplicachePull:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'diary-replicache'},
-            'lastPulledVersion': 0
+            'clientID': 'c-diary-1',
         }
         
         user = AsyncMock()
@@ -90,9 +100,12 @@ class TestReplicachePull:
             ]
             
             result = await replicache_pull(request)
-            
-            assert result["lastMutationID"] == 0
-            assert result["cookie"] is None
+            assert isinstance(result["cookie"], str)
+            cookie = json.loads(result["cookie"])
+            assert cookie["clientID"] == 'c-diary-1'
+            assert cookie["lastMutationID"] == 0
+            assert "ts" in cookie
+            assert isinstance(result["lastMutationIDChanges"], dict)
             assert len(result["patch"]) == 1
             assert result["patch"][0]["key"] == "diary-entry/789"
             mock_get_diary.assert_called_once_with("test-user-id")
@@ -103,7 +116,7 @@ class TestReplicachePull:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'ideas-replicache'},
-            'lastPulledVersion': 0
+            'clientID': 'c-ideas-1',
         }
         
         user = AsyncMock()
@@ -117,9 +130,12 @@ class TestReplicachePull:
             ]
             
             result = await replicache_pull(request)
-            
-            assert result["lastMutationID"] == 0
-            assert result["cookie"] is None
+            assert isinstance(result["cookie"], str)
+            cookie = json.loads(result["cookie"])
+            assert cookie["clientID"] == 'c-ideas-1'
+            assert cookie["lastMutationID"] == 0
+            assert "ts" in cookie
+            assert isinstance(result["lastMutationIDChanges"], dict)
             assert len(result["patch"]) == 1
             assert result["patch"][0]["key"] == "idea/101"
             mock_get_ideas.assert_called_once_with("test-user-id")
@@ -130,7 +146,7 @@ class TestReplicachePull:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'unknown-client'},
-            'lastPulledVersion': 0
+            'clientID': 'c-unknown-1',
         }
         
         user = AsyncMock()
@@ -138,9 +154,12 @@ class TestReplicachePull:
         
         with patch('apps.replicache.endpoints.get_current_user_dependency', return_value=user):
             result = await replicache_pull(request)
-            
-            assert result["lastMutationID"] == 0
-            assert result["cookie"] is None
+            assert isinstance(result["cookie"], str)
+            cookie = json.loads(result["cookie"])
+            assert cookie["clientID"] == 'c-unknown-1'
+            assert cookie["lastMutationID"] == 0
+            assert "ts" in cookie
+            assert isinstance(result["lastMutationIDChanges"], dict)
             assert len(result["patch"]) == 0
 
 
@@ -153,8 +172,10 @@ class TestReplicachePush:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'todo-replicache-flat'},
+            'clientID': 'c-todo-1',
             'mutations': [
                 {
+                    'id': 1,
                     'name': 'createItem',
                     'args': {
                         'id': 'new-task-123',
@@ -180,7 +201,6 @@ class TestReplicachePush:
             result = await replicache_push(request)
             
             assert result["lastMutationID"] == 1
-            assert result["cookie"] is None
             mock_process_todo.assert_called_once()
             mock_sse.notify_user.assert_called_once_with("test-user-id", "sync")
     
@@ -190,8 +210,10 @@ class TestReplicachePush:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'food-tracker-replicache'},
+            'clientID': 'c-food-1',
             'mutations': [
                 {
+                    'id': 1,
                     'name': 'createEntry',
                     'args': {
                         'id': 'new-food-123',
@@ -217,7 +239,6 @@ class TestReplicachePush:
             result = await replicache_push(request)
             
             assert result["lastMutationID"] == 1
-            assert result["cookie"] is None
             mock_process_food.assert_called_once()
             mock_sse.notify_user.assert_called_once_with("test-user-id", "sync")
     
@@ -227,8 +248,10 @@ class TestReplicachePush:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'diary-replicache'},
+            'clientID': 'c-diary-1',
             'mutations': [
                 {
+                    'id': 1,
                     'name': 'createEntry',
                     'args': {
                         'id': 'new-diary-123',
@@ -253,7 +276,6 @@ class TestReplicachePush:
             result = await replicache_push(request)
             
             assert result["lastMutationID"] == 1
-            assert result["cookie"] is None
             mock_process_diary.assert_called_once()
             mock_sse.notify_user.assert_called_once_with("test-user-id", "sync")
     
@@ -263,8 +285,10 @@ class TestReplicachePush:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'ideas-replicache'},
+            'clientID': 'c-ideas-1',
             'mutations': [
                 {
+                    'id': 1,
                     'name': 'createIdea',
                     'args': {
                         'id': 'new-idea-123',
@@ -289,7 +313,6 @@ class TestReplicachePush:
             result = await replicache_push(request)
             
             assert result["lastMutationID"] == 1
-            assert result["cookie"] is None
             mock_process_ideas.assert_called_once()
             mock_sse.notify_user.assert_called_once_with("test-user-id", "sync")
     
@@ -299,8 +322,10 @@ class TestReplicachePush:
         request = AsyncMock()
         request.json.return_value = {
             'clientView': {'name': 'unknown-client'},
+            'clientID': 'c-unknown-1',
             'mutations': [
                 {
+                    'id': 1,
                     'name': 'createSomething',
                     'args': {'id': '123'}
                 }
@@ -319,7 +344,6 @@ class TestReplicachePush:
             result = await replicache_push(request)
             
             assert result["lastMutationID"] == 1
-            assert result["cookie"] is None
             mock_sse.notify_user.assert_called_once_with("test-user-id", "sync")
 
 

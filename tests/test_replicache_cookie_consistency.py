@@ -23,7 +23,7 @@ class TestReplicacheCookieConsistency:
         user_id = "test-user-123"
         client_id = "test-client-456"
         client_name = "todo-replicache-flat"
-        
+
         cookie = create_cookie(user_id, client_id, highest_mutation_id, client_name)
         parsed = json.loads(cookie)
         
@@ -40,7 +40,7 @@ class TestReplicacheCookieConsistency:
         client_id = "test-client-456"
         client_name = "todo-replicache-flat"
         current_mutation_id = 0
-        
+
         # The cookie should use the current mutation ID when no changes
         cookie = create_cookie(user_id, client_id, current_mutation_id, client_name)
         parsed = json.loads(cookie)
@@ -61,7 +61,7 @@ class TestReplicacheCookieConsistency:
         user_id = "test-user-123"
         client_id = "test-client-456"
         client_name = "todo-replicache-flat"
-        
+
         cookie = create_cookie(user_id, client_id, highest_mutation_id, client_name)
         parsed = json.loads(cookie)
         
@@ -75,11 +75,11 @@ class TestReplicacheCookieConsistency:
         client_id = "test-client-456"
         client_name = "todo-replicache-flat"
         mutation_id = 5
-        
+
         # Create first cookie
         cookie1 = create_cookie(user_id, client_id, mutation_id, client_name)
         parsed1 = json.loads(cookie1)
-        timestamp1 = parsed1["timestamp"]
+        timestamp1 = parsed1["ts"]
         
         # Wait a moment
         import time
@@ -88,7 +88,7 @@ class TestReplicacheCookieConsistency:
         # Create second cookie with same mutation ID
         cookie2 = create_cookie(user_id, client_id, mutation_id, client_name)
         parsed2 = json.loads(cookie2)
-        timestamp2 = parsed2["timestamp"]
+        timestamp2 = parsed2["ts"]
         
         # Timestamps should be different even with same mutation ID
         assert timestamp2 > timestamp1
@@ -111,7 +111,7 @@ class TestReplicacheCookieConsistency:
         user_id = "test-user-123"
         client_id = "test-client-456"
         client_name = "todo-replicache-flat"
-        
+
         cookie = create_cookie(user_id, client_id, highest_mutation_id, client_name)
         parsed = json.loads(cookie)
         
@@ -150,28 +150,24 @@ class TestReplicacheCookieConsistency:
         client_id = "test-client-456"
         client_name = "todo-replicache-flat"
         mutation_id = 42
-        
+
         cookie = create_cookie(user_id, client_id, mutation_id, client_name)
         parsed = json.loads(cookie)
         
-        # Verify all required fields are present
-        required_fields = ["lastMutationID", "timestamp", "userId", "clientId", "clientName"]
+        # Verify all required fields are present in canonical cookie
+        required_fields = ["lastMutationID", "ts", "clientID"]
         for field in required_fields:
             assert field in parsed
         
         # Verify field types
         assert isinstance(parsed["lastMutationID"], int)
-        assert isinstance(parsed["timestamp"], int)
-        assert isinstance(parsed["userId"], str)
-        assert isinstance(parsed["clientId"], str)
-        assert isinstance(parsed["clientName"], str)
+        assert isinstance(parsed["ts"], int)
+        assert isinstance(parsed["clientID"], str)
         
         # Verify values
         assert parsed["lastMutationID"] == mutation_id
-        assert parsed["userId"] == user_id
-        assert parsed["clientId"] == client_id
-        assert parsed["clientName"] == client_name
+        assert parsed["clientID"] == client_id
         
         # Verify timestamp is recent
         current_time = int(datetime.now(timezone.utc).timestamp() * 1000)
-        assert abs(current_time - parsed["timestamp"]) < 5000 
+        assert abs(current_time - parsed["ts"]) < 5000

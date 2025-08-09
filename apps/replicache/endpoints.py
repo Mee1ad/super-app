@@ -1,9 +1,10 @@
 from esmerald import Request, Response, get, post, HTTPException, status
-from typing import Dict, Set, Any, Optional
+from typing import Dict, Set, Any, Optional, Tuple
 import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+import time
 
 from edgy import Database
 
@@ -16,13 +17,15 @@ from asyncio import QueueFull
 logger = logging.getLogger(__name__)
 
 def create_cookie(user_id: str, client_id: str, last_mutation_id: int, client_name: str) -> str:
-    """Create a cookie with current state information"""
+    """Create canonical cookie string for Replicache responses.
+
+    Only include fields required by the canonical contract so the value changes
+    when the client's lastMutationID or the per-user timestamp changes.
+    """
     cookie_data = {
         "lastMutationID": last_mutation_id,
-        "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),  # milliseconds
-        "userId": user_id,
-        "clientId": client_id,
-        "clientName": client_name
+        "ts": int(datetime.now(timezone.utc).timestamp() * 1000),  # milliseconds
+        "clientID": client_id,
     }
     return json.dumps(cookie_data)
 
@@ -44,6 +47,16 @@ class SSEManager:
         self.user_versions: Dict[str, int] = {}
         # Track last mutation IDs per client
         self.client_mutation_ids: Dict[str, Dict[str, int]] = {}
+        # Track a per-user timestamp that updates when any client's lastMutationID changes
+        self.user_cookie_ts: Dict[str, int] = {}
+        # Global store keyed by (ns, clientID) -> lastMutationID
+        self.last_mutation_by_client: Dict[Tuple[str, str], int] = {}
+        # Mapping to resolve caller in pull: (ns, profileID, clientGroupID) -> clientID
+        self.last_seen_client_id: Dict[Tuple[str, str, str], str] = {}
+        # Group members: (ns, profileID, clientGroupID) -> set(clientID)
+        self.group_members: Dict[Tuple[str, str, str], Set[str]] = {}
+        # Group cookie timestamps per (ns, profileID, clientGroupID)
+        self.group_cookie_ts: Dict[Tuple[str, str, str], int] = {}
         self._lock = asyncio.Lock()
     
     async def add_client(self, user_id: str, queue: asyncio.Queue) -> None:
@@ -107,13 +120,43 @@ class SSEManager:
                 return 0
             return self.client_mutation_ids[user_id].get(client_id, 0)
     
-    async def update_client_mutation_id(self, user_id: str, client_id: str, mutation_id: int) -> None:
+    async def update_client_mutation_id(self, user_id: str, ns: str, client_id: str, mutation_id: int) -> None:
         """Update the last mutation ID for a specific client"""
         async with self._lock:
             if user_id not in self.client_mutation_ids:
                 self.client_mutation_ids[user_id] = {}
             self.client_mutation_ids[user_id][client_id] = mutation_id
+            # Also persist in the global (ns, clientID) store
+            self.last_mutation_by_client[(ns or ""), client_id] = mutation_id
+            # Update the per-user cookie timestamp to reflect a state change
+            self.user_cookie_ts[user_id] = int(time.time() * 1000)
             logger.info(f"Updated mutation ID for user {user_id}, client {client_id}: {mutation_id}")
+
+    async def get_last_mutation_id_by_client(self, ns: str, client_id: str) -> int:
+        async with self._lock:
+            return self.last_mutation_by_client.get((ns or "", client_id), 0)
+
+    async def set_last_seen_client(self, ns: str, profile_id: str, client_group_id: str, client_id: str) -> None:
+        async with self._lock:
+            key = (ns or "", profile_id, client_group_id)
+            self.last_seen_client_id[key] = client_id
+            if key not in self.group_members:
+                self.group_members[key] = set()
+            self.group_members[key].add(client_id)
+            # Update group ts to reflect group state change
+            self.group_cookie_ts[key] = int(time.time() * 1000)
+
+    async def get_last_seen_client(self, ns: str, profile_id: str, client_group_id: str) -> Optional[str]:
+        async with self._lock:
+            return self.last_seen_client_id.get((ns or "", profile_id, client_group_id))
+
+    async def get_group_members(self, ns: str, profile_id: str, client_group_id: str) -> Set[str]:
+        async with self._lock:
+            return set(self.group_members.get((ns or "", profile_id, client_group_id), set()))
+
+    async def get_group_ts(self, ns: str, profile_id: str, client_group_id: str) -> int:
+        async with self._lock:
+            return self.group_cookie_ts.get((ns or "", profile_id, client_group_id), 0)
     
     async def get_last_mutation_id_changes(self, user_id: str) -> Dict[str, int]:
         """Get the last mutation ID changes for a user"""
@@ -234,9 +277,17 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     # Debug: Log the request body to see what's being sent
     logger.info(f"Pull request body: {body}")
     
-    # Try clientView.name first (correct Replicache v15 format)
+    # Extract client info preferring canonical fields
     client_name = body.get('clientView', {}).get('name', '')
-    client_id = body.get('clientView', {}).get('id', 'default')
+    # Namespace via query param `ns`
+    try:
+        ns = request.query_params.get('ns', '')  # type: ignore[attr-defined]
+    except Exception:
+        ns = ''
+    client_group_id = body.get('clientGroupID') or body.get('clientView', {}).get('clientGroupID') or ''
+    # Caller clientID will be resolved via last-seen map if not explicitly provided on pull
+    explicit_client_id = body.get('clientID') or body.get('clientView', {}).get('id')
+    profile_id = body.get('profileID') or str((await get_current_user_dependency(request)).id)
     
     # Fallback to clientGroupID if clientView.name is not present (Replicache v14 format)
     if not client_name:
@@ -246,64 +297,83 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
         # For now, treat all clientGroupIDs as todo context
         # You can customize this mapping based on your frontend configuration
         client_name = 'todo-replicache-flat'
-        client_id = client_group_id or 'default'
     
-    logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
+    logger.info(f"Final client name: '{client_name}', ns: '{ns}', explicit client ID in request: '{explicit_client_id or ''}', group: '{client_group_id}'")
     
     # Parse incoming cookie if provided
     incoming_cookie = body.get('cookie')
+    parsed_cookie: Optional[Dict[str, Any]] = None
     if incoming_cookie:
         parsed_cookie = parse_cookie(incoming_cookie)
         if parsed_cookie:
             logger.info(f"Parsed incoming cookie: {parsed_cookie}")
-            # You can use the parsed cookie data for validation or additional logic
     
-    # Get the client's last mutation ID
-    last_mutation_id = await sse_manager.get_client_mutation_id(user_id, client_id)
-    logger.info(f"Client {client_id} last mutation ID: {last_mutation_id}")
+    # Resolve caller clientID using last-seen map if needed
+    caller_client_id = explicit_client_id or await sse_manager.get_last_seen_client(ns, profile_id, client_group_id)
+    if not caller_client_id:
+        # Unknown caller: return cookie with current timestamp and empty patch/no changes
+        unknown_cookie = json.dumps({
+            "clientGroupID": client_group_id,
+            "ts": int(time.time() * 1000)
+        })
+        return {
+            "cookie": unknown_cookie,
+            "patch": []
+        }
+
+    # Get the caller client's current lastMutationID and the group's last change ts
+    last_mutation_id = await sse_manager.get_last_mutation_id_by_client(ns, caller_client_id)
+    group_ts = await sse_manager.get_group_ts(ns, profile_id, client_group_id)
+    logger.info(f"Caller client {caller_client_id} last mutation ID: {last_mutation_id}, group ts: {group_ts}")
     
     # Import services
     from apps.replicache.services import (
         get_todo_patch, get_food_patch, get_diary_patch, get_ideas_patch
     )
     
-    # Route data based on client name
-    if client_name == 'todo-replicache-flat':
+    # Prefer namespace routing when provided
+    if ns == 'todo':
         patch = await get_todo_patch(user_id)
-    elif client_name == 'food-tracker-replicache':
+    elif ns == 'food':
         patch = await get_food_patch(user_id)
-    elif client_name == 'diary-replicache':
+    elif ns == 'diary':
         patch = await get_diary_patch(user_id)
-    elif client_name == 'ideas-replicache':
+    elif ns == 'ideas':
         patch = await get_ideas_patch(user_id)
     else:
-        logger.warning(f"Unknown client name: '{client_name}'")
-        patch = []
-    
-    # Get current mutation ID changes for this user
-    last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
-    
-    # Check if we have any changes to report
-    has_changes = bool(last_mutation_id_changes) or bool(patch)
-    
-    # If no changes, return empty lastMutationIDChanges to avoid Replicache error
-    if not has_changes:
-        last_mutation_id_changes = {}
-        # Use the current last_mutation_id for the cookie when no changes
-        cookie_last_mutation_id = last_mutation_id
-    else:
-        # Find the highest mutation ID in the changes to ensure consistency
-        if last_mutation_id_changes:
-            cookie_last_mutation_id = max(last_mutation_id_changes.values())
+        # Fallback to legacy client name routing
+        if client_name == 'todo-replicache-flat':
+            patch = await get_todo_patch(user_id)
+        elif client_name == 'food-tracker-replicache':
+            patch = await get_food_patch(user_id)
+        elif client_name == 'diary-replicache':
+            patch = await get_diary_patch(user_id)
+        elif client_name == 'ideas-replicache':
+            patch = await get_ideas_patch(user_id)
         else:
-            cookie_last_mutation_id = last_mutation_id
+            logger.warning(f"Unknown client name: '{client_name}' and ns '{ns}'")
+            patch = []
     
-    # Create cookie with the correct lastMutationID
-    cookie = create_cookie(user_id, client_id, cookie_last_mutation_id, client_name)
-    
+    # Compute canonical cookie. Use the caller's current lastMutationID and current timestamp
+    computed_cookie = json.dumps({
+        "lastMutationID": last_mutation_id,
+        "clientID": caller_client_id,
+        "clientGroupID": client_group_id,
+        "ns": ns,
+        "ts": int(time.time() * 1000),
+    })
+
+    # If cookie unchanged, return with empty patch and unchanged lastMutationIDChanges
+    if incoming_cookie and parsed_cookie and incoming_cookie == computed_cookie:
+        return {
+            "lastMutationIDChanges": {caller_client_id: last_mutation_id},
+            "cookie": computed_cookie,
+            "patch": []
+        }
+
     return {
-        "lastMutationIDChanges": last_mutation_id_changes,
-        "cookie": cookie,
+        "lastMutationIDChanges": {caller_client_id: last_mutation_id},
+        "cookie": computed_cookie,
         "patch": patch
     }
 
@@ -325,10 +395,28 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     mutations = body.get("mutations", [])
     logger.info(f"Processing {len(mutations)} mutations for user {user_id}")
     
-    # Try clientView.name first (correct Replicache v15 format)
+    # Try canonical fields first
     client_name = body.get('clientView', {}).get('name', '')
-    client_id = body.get('clientView', {}).get('id', 'default')
+    client_id = body.get('clientID') or body.get('clientView', {}).get('id')
+    profile_id = body.get('profileID') or user_id
+    client_group_id = body.get('clientGroupID') or body.get('clientView', {}).get('clientGroupID') or ''
+    # Namespace via query param `ns`
+    try:
+        ns = request.query_params.get('ns', '')  # type: ignore[attr-defined]
+    except Exception:
+        ns = ''
     
+    # If clientID not in top-level/body, try to extract from first mutation as per contract
+    if not client_id and mutations:
+        # Look for clientID fields that frontend may include on mutations
+        for candidate in (mutations[0].get('clientID'),
+                          mutations[0].get('clientId'),
+                          (mutations[0].get('args') or {}).get('clientID'),
+                          (mutations[0].get('args') or {}).get('clientId')):
+            if candidate:
+                client_id = candidate
+                break
+
     # Fallback to clientGroupID if clientView.name is not present (Replicache v14 format)
     if not client_name:
         client_group_id = body.get('clientGroupID', '')
@@ -364,7 +452,7 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
             client_name = 'todo-replicache-flat'
             logger.warning("No mutations found, defaulting to todo-replicache-flat")
         
-        client_id = client_group_id or 'default'
+        client_id = client_id or client_group_id or 'default'
     
     logger.info(f"Final client name: '{client_name}', client ID: '{client_id}'")
     
@@ -383,42 +471,55 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
         process_diary_mutation, process_ideas_mutation
     )
     
-    # Process mutations by client name
-    for i, mutation in enumerate(mutations):
+    # Book-keeping: record last seen client for (profileID, clientGroupID) and group membership
+    await sse_manager.set_last_seen_client(ns, profile_id, client_group_id, client_id)
+
+    # Implement idempotent apply and per-client lastMutationID tracking
+    current_last_mutation_id = await sse_manager.get_last_mutation_id_by_client(ns, client_id)
+    logger.info(f"Starting push with current lastMutationID={current_last_mutation_id} for client {client_id}")
+
+    # Process in ascending id order to be robust to reordering
+    def _mid(m: dict) -> int:
+        try:
+            return int(m.get('id', 0))
+        except Exception:
+            return 0
+
+    for i, mutation in enumerate(sorted(mutations, key=_mid)):
         mutation_name = mutation.get('name', '')
-        mutation_id = mutation.get('id', 0)
+        mutation_id = mutation.get('id')
         args = mutation.get('args', {})
-        
-        logger.info(f"Processing mutation {i+1}/{len(mutations)}: {mutation_name} with args: {args}")
-        
+
+        if mutation_id is None:
+            logger.warning(f"Skipping mutation without id at index {i}: {mutation}")
+            continue
+
+        if int(mutation_id) <= int(current_last_mutation_id):
+            logger.info(f"Skipping already-applied mutation id={mutation_id} (<= {current_last_mutation_id})")
+            continue
+
+        logger.info(f"Applying mutation {i+1}/{len(mutations)}: id={mutation_id} name={mutation_name} args={args}")
+
         try:
             # Route by client name instead of mutation prefix
             if client_name == 'todo-replicache-flat':
-                logger.info(f"Routing to process_todo_mutation for mutation: {mutation_name}")
                 await process_todo_mutation(mutation, user_id, i)
-                logger.info(f"Successfully processed todo mutation: {mutation_name}")
             elif client_name == 'food-tracker-replicache':
-                logger.info(f"Routing to process_food_mutation for mutation: {mutation_name}")
                 await process_food_mutation(mutation, user_id, i)
-                logger.info(f"Successfully processed food mutation: {mutation_name}")
             elif client_name == 'diary-replicache':
-                logger.info(f"Routing to process_diary_mutation for mutation: {mutation_name}")
                 await process_diary_mutation(mutation, user_id, i)
-                logger.info(f"Successfully processed diary mutation: {mutation_name}")
             elif client_name == 'ideas-replicache':
-                logger.info(f"Routing to process_ideas_mutation for mutation: {mutation_name}")
                 await process_ideas_mutation(mutation, user_id, i)
-                logger.info(f"Successfully processed ideas mutation: {mutation_name}")
             else:
                 logger.warning(f"Unknown client name: '{client_name}'")
-            
-            # Update the client's last mutation ID
-            await sse_manager.update_client_mutation_id(user_id, client_id, mutation_id)
-            logger.info(f"Processed mutation {mutation_id} for client {client_id}")
-            
+
+            # On success, advance lastMutationID
+            current_last_mutation_id = int(mutation_id)
+            await sse_manager.update_client_mutation_id(user_id, ns, client_id, current_last_mutation_id)
+            logger.info(f"Advanced lastMutationID to {current_last_mutation_id} for client {client_id}")
+
         except Exception as e:
             logger.error(f"Error processing mutation {mutation_name}: {e}", exc_info=True)
-            # Re-raise the exception to ensure the client knows about the error
             raise
     
     # Update version
@@ -429,26 +530,10 @@ async def replicache_push(request: Request) -> Dict[str, Any]:
     await sse_manager.notify_user(user_id, "sync")
     logger.info(f"Notified user {user_id} about sync")
     
-    # Get the updated last mutation ID for this client
-    last_mutation_id = await sse_manager.get_client_mutation_id(user_id, client_id)
-    
-    # Get updated mutation ID changes for this user
-    last_mutation_id_changes = await sse_manager.get_last_mutation_id_changes(user_id)
-    
-    # Find the highest mutation ID in the changes to ensure consistency
-    if last_mutation_id_changes:
-        cookie_last_mutation_id = max(last_mutation_id_changes.values())
-    else:
-        cookie_last_mutation_id = last_mutation_id
-    
-    # Create cookie with the correct lastMutationID
-    cookie = create_cookie(user_id, client_id, cookie_last_mutation_id, client_name)
-    
-    logger.info(f"Push completed successfully. Returning response with cookie: {cookie}")
-    
+    # Push response returns the updated lastMutationID for this client
+    logger.info(f"Push completed. Returning lastMutationID={current_last_mutation_id} for client {client_id}")
     return {
-        "lastMutationIDChanges": last_mutation_id_changes,
-        "cookie": cookie
+        "lastMutationID": int(current_last_mutation_id)
     }
 
 # Debug endpoint to get connection stats

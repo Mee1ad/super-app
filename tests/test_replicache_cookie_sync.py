@@ -22,10 +22,8 @@ class TestReplicacheCookieSync:
         
         # Verify required fields
         assert parsed["lastMutationID"] == last_mutation_id
-        assert parsed["userId"] == user_id
-        assert parsed["clientId"] == client_id
-        assert parsed["clientName"] == client_name
-        assert "timestamp" in parsed
+        assert parsed["clientID"] == client_id
+        assert "ts" in parsed
         
         # Verify timestamp is recent (within last 5 seconds)
         current_time = int(datetime.now(timezone.utc).timestamp() * 1000)
@@ -35,10 +33,8 @@ class TestReplicacheCookieSync:
         """Test parsing valid cookie"""
         cookie_data = {
             "lastMutationID": 123,
-            "timestamp": 1703123456789,
-            "userId": "user123",
-            "clientId": "client456",
-            "clientName": "todo-replicache-flat"
+            "ts": 1703123456789,
+            "clientID": "client456",
         }
         cookie_str = json.dumps(cookie_data)
         
@@ -74,10 +70,8 @@ class TestReplicacheCookieSync:
         # Verify lastMutationID increased
         assert parsed2["lastMutationID"] > parsed1["lastMutationID"]
         
-        # Verify other fields remain consistent
-        assert parsed2["userId"] == parsed1["userId"]
-        assert parsed2["clientId"] == parsed1["clientId"]
-        assert parsed2["clientName"] == parsed1["clientName"]
+        # Verify clientID remains consistent
+        assert parsed2["clientID"] == parsed1["clientID"]
     
     def test_cookie_with_different_clients(self):
         """Test that cookies for different clients are different"""
@@ -89,7 +83,7 @@ class TestReplicacheCookieSync:
         parsed1 = parse_cookie(cookie1)
         parsed2 = parse_cookie(cookie2)
         
-        assert parsed1["clientId"] != parsed2["clientId"]
+        assert parsed1["clientID"] != parsed2["clientID"]
         assert parsed1["lastMutationID"] == parsed2["lastMutationID"]
     
     def test_cookie_with_different_users(self):
@@ -102,7 +96,8 @@ class TestReplicacheCookieSync:
         parsed1 = parse_cookie(cookie1)
         parsed2 = parse_cookie(cookie2)
         
-        assert parsed1["userId"] != parsed2["userId"]
+        # userId no longer part of cookie; ensure cookies still differ due to ts
+        assert cookie1 != cookie2
         assert parsed1["lastMutationID"] == parsed2["lastMutationID"]
     
     def test_cookie_with_different_client_names(self):
@@ -115,7 +110,8 @@ class TestReplicacheCookieSync:
         parsed1 = parse_cookie(cookie1)
         parsed2 = parse_cookie(cookie2)
         
-        assert parsed1["clientName"] != parsed2["clientName"]
+        # clientName not present in cookie; ensure cookies still differ due to ts
+        assert cookie1 != cookie2
         assert parsed1["lastMutationID"] == parsed2["lastMutationID"]
     
     def test_cookie_timestamp_updates(self):
@@ -135,4 +131,4 @@ class TestReplicacheCookieSync:
         parsed2 = parse_cookie(cookie2)
         
         # Timestamps should be different
-        assert parsed2["timestamp"] > parsed1["timestamp"] 
+        assert parsed2["ts"] > parsed1["ts"]
