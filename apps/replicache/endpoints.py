@@ -351,6 +351,12 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
     
     # Prefer namespace routing when provided
     if ns == 'todo':
+        # If cookie present, use its lastMutationID to optionally scope to deltas in future
+        try:
+            since_lmid = int((parsed_cookie or {}).get('lastMutationID', 0))
+        except Exception:
+            since_lmid = 0
+        # For now, return full snapshot every pull per instruction
         patch = await get_todo_patch(user_id)
     elif ns == 'food':
         patch = await get_food_patch(user_id)
