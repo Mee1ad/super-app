@@ -33,7 +33,12 @@ def convert_to_uuid(id_str: str, mutation_index: int = 0) -> str:
         return uuid_str
 
 # Todo Context Handlers
-async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation_index: int = 0) -> None:
+async def process_todo_mutation(
+    mutation: Dict[str, Any],
+    user_id: str,
+    mutation_index: int = 0,
+    applied_mutation_id: Optional[int] = None,
+) -> None:
     """Process todo mutations for todo-replicache-flat client"""
     mutation_name = mutation.get('name', '')
     args = mutation.get('args', {})
@@ -41,6 +46,11 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
     logger.info(f"Processing todo mutation: {mutation_name} with args: {args}")
     
     try:
+        # Use the actual mutation id when available for row versioning
+        try:
+            effective_mutation_id = int(applied_mutation_id if applied_mutation_id is not None else mutation.get('id', mutation_index + 1))
+        except Exception:
+            effective_mutation_id = mutation_index + 1
         if mutation_name == 'createList':
             # Create new todo list
             list_id = convert_to_uuid(args.get('id', str(uuid4())), mutation_index)
@@ -74,6 +84,11 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
                 else:
                     logger.error(f"Error creating TodoList: {e}")
                     raise
+            # Set row version to latest mutation id if column exists
+            try:
+                await TodoList.query.filter(id=list_id, user_id=user_id).update(last_mutation_id=effective_mutation_id)
+            except Exception:
+                pass
                     
         elif mutation_name == 'createTask':
             # Create new todo task
@@ -114,6 +129,11 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
                 else:
                     logger.error(f"Error creating Task: {e}")
                     raise
+            # Set row version to latest mutation id if column exists
+            try:
+                await Task.query.filter(id=task_id, user_id=user_id).update(last_mutation_id=effective_mutation_id)
+            except Exception:
+                pass
                     
         elif mutation_name == 'createItem':
             # Create new todo item
@@ -167,6 +187,11 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
                     else:
                         logger.error(f"Error creating Task: {e}")
                         raise
+                # Set row version to latest mutation id if column exists
+                try:
+                    await Task.query.filter(id=item_id, user_id=user_id).update(last_mutation_id=mutation_index + 1)
+                except Exception:
+                    pass
             else:  # shopping
                 logger.info(f"Creating ShoppingItem with id: {item_id}")
                 try:
@@ -185,6 +210,7 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
                     else:
                         logger.error(f"Error creating ShoppingItem: {e}")
                         raise
+            # Optional: track items too if you later add column
                 
         elif mutation_name == 'updateItem':
             # Update existing todo item
@@ -210,6 +236,11 @@ async def process_todo_mutation(mutation: Dict[str, Any], user_id: str, mutation
                 logger.info(f"Task update failed, trying ShoppingItem: {e}")
                 await ShoppingItem.query.filter(id=item_id, user_id=user_id).update(**updates)
                 logger.info(f"Successfully updated ShoppingItem: {item_id}")
+            # Set row version to latest mutation id if column exists
+            try:
+                await Task.query.filter(id=item_id, user_id=user_id).update(last_mutation_id=effective_mutation_id)
+            except Exception:
+                pass
                 
         elif mutation_name == 'deleteItem':
             # Delete todo item
