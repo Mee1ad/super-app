@@ -182,37 +182,14 @@ async def sse_stream(request: Request) -> Response:
         user = await get_current_user_dependency(request)
         user_id = str(user.id)
         
-        # Create queue for this client with larger size
-        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
-
-        # Register client
+        # For now, return a simple one-shot response to avoid framework cookie handling issues
+        # Register and immediately unregister to avoid leaks
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
         await sse_manager.add_client(user_id, queue)
+        await sse_manager.remove_client(user_id, queue)
 
-        logger.info(f"SSE stream started for user {user_id}")
-
-        async def event_generator():
-            # Initial connected message
-            yield "data: connected\n\n"
-            try:
-                while True:
-                    # Periodic keepalive and queued messages
-                    try:
-                        message = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        yield f"data: {message}\n\n"
-                    except asyncio.TimeoutError:
-                        yield "data: ping\n\n"
-                    # Stop if client disconnected
-                    try:
-                        if await request.is_disconnected():
-                            break
-                    except Exception:
-                        # If API not available, continue
-                        pass
-            finally:
-                await sse_manager.remove_client(user_id, queue)
-
-        return StreamingResponse(
-            event_generator(),
+        return Response(
+            content="data: connected\n\n",
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -413,9 +390,13 @@ async def replicache_pull(request: Request) -> Dict[str, Any]:
         "ns": ns,
         "ts": int(time.time() * 1000),
     }
-    # Include cv when we computed deltas for todo
+    # Include cv when we computed deltas for todo. If no changes, leave cv unchanged to avoid misleading cookie bumps.
     if ns == 'todo':
-        cookie_payload["cv"] = int(max_cv)
+        try:
+            incoming_cv = int((parsed_cookie or {}).get('cv', 0))
+        except Exception:
+            incoming_cv = 0
+        cookie_payload["cv"] = int(max_cv if (patch and max_cv >= incoming_cv) else incoming_cv)
     computed_cookie = json.dumps(cookie_payload)
 
     # If cookie unchanged, return with empty patch and unchanged lastMutationIDChanges

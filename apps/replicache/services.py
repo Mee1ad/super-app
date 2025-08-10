@@ -2,6 +2,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date
 from uuid import uuid4
+import uuid
 import hashlib
 
 from apps.todo.models import List as TodoList, Task, ShoppingItem
@@ -13,13 +14,31 @@ from apps.ideas.models import Idea
 logger = logging.getLogger(__name__)
 
 def convert_to_uuid(id_str: str, mutation_index: int = 0) -> str:
+    """Convert any string ID to a valid UUID using hash, with index to ensure uniqueness"""
+    if not id_str:
+        return str(uuid4())
+
+    # If it's already a valid UUID, return as is (no conversion needed)
+    try:
+        import uuid
+        uuid.UUID(id_str)
+        logger.info(f"ID '{id_str}' is already a valid UUID, using as-is")
+        return id_str
+    except ValueError:
+        # Convert to UUID using hash, with index to ensure uniqueness for duplicates
+        hash_input = f"{id_str}_{mutation_index}"
+        hash_obj = hashlib.md5(hash_input.encode())
+        hash_hex = hash_obj.hexdigest()
+        # Format as UUID
+        uuid_str = f"{hash_hex[:8]}-{hash_hex[8:12]}-{hash_hex[12:16]}-{hash_hex[16:20]}-{hash_hex[20:32]}"
+        logger.info(f"Converted ID '{id_str}' (index {mutation_index}) to UUID: {uuid_str}")
+        return uuid_str
+
 async def next_cv(ns: str) -> int:
     """Get next change version for a namespace.
     Uses PostgreSQL sequence when available, otherwise increments row in replicache_cv.
     """
     try:
-        # Detect dialect by trying to use a Postgres-specific function. Safer: check driver via SELECT version
-        # We rely on our migration manager dialect choice by probing for sequence
         if ns == 'todo':
             # Try Postgres sequence first
             try:
@@ -48,33 +67,18 @@ async def next_cv(ns: str) -> int:
 
 async def write_tombstone(ns: str, user_id: str, key: str, cv: int) -> None:
     table = f"{ns}_tombstones"
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except Exception:
+        user_uuid = user_id  # fallback
     await database.execute(
         f"""
         INSERT INTO {table} (user_id, key, cv)
         VALUES (:user_id, :key, :cv)
         ON CONFLICT (user_id, key) DO UPDATE SET cv = EXCLUDED.cv
         """,
-        {"user_id": user_id, "key": key, "cv": cv},
+        {"user_id": user_uuid, "key": key, "cv": cv},
     )
-    """Convert any string ID to a valid UUID using hash, with index to ensure uniqueness"""
-    if not id_str:
-        return str(uuid4())
-    
-    # If it's already a valid UUID, return as is (no conversion needed)
-    try:
-        import uuid
-        uuid.UUID(id_str)
-        logger.info(f"ID '{id_str}' is already a valid UUID, using as-is")
-        return id_str
-    except ValueError:
-        # Convert to UUID using hash, with index to ensure uniqueness for duplicates
-        hash_input = f"{id_str}_{mutation_index}"
-        hash_obj = hashlib.md5(hash_input.encode())
-        hash_hex = hash_obj.hexdigest()
-        # Format as UUID
-        uuid_str = f"{hash_hex[:8]}-{hash_hex[8:12]}-{hash_hex[12:16]}-{hash_hex[16:20]}-{hash_hex[20:32]}"
-        logger.info(f"Converted ID '{id_str}' (index {mutation_index}) to UUID: {uuid_str}")
-        return uuid_str
 
 # Todo Context Handlers
 async def process_todo_mutation(
@@ -210,8 +214,8 @@ async def process_todo_mutation(
                     logger.info(f"Item not found, proceeding with creation")
             
             # Determine if it's a task or shopping item based on list type
-                try:
-                    list_obj = await TodoList.query.get(id=list_id, user_id=user_id)
+            try:
+                list_obj = await TodoList.query.get(id=list_id, user_id=user_id)
                 logger.info(f"Found list: {list_obj.type}")
             except Exception as e:
                 logger.error(f"List not found: {list_id} for user {user_id}, error: {e}")
@@ -240,7 +244,7 @@ async def process_todo_mutation(
                         raise
                 # Set row version to latest mutation id if column exists
                 try:
-                    await Task.query.filter(id=item_id, user_id=user_id).update(last_mutation_id=mutation_index + 1)
+                    await Task.query.filter(id=item_id, user_id=user_id).update(last_mutation_id=effective_mutation_id)
                 except Exception:
                     pass
             else:  # shopping
@@ -356,113 +360,157 @@ async def process_todo_mutation(
         raise
 
 async def get_todo_delta(user_id: str, since_cv: int) -> tuple[List[Dict[str, Any]], int]:
-    """Get delta since given cv. Returns (patch, max_cv). If since_cv == 0, returns full snapshot and max_cv."""
+    """Get delta since given cv using raw SQL for reliability. Returns (patch, max_cv)."""
+    patch: List[Dict[str, Any]] = []
+    max_cv = since_cv
     try:
-        patch: List[Dict[str, Any]] = []
-        max_cv = since_cv
+        user_uuid = uuid.UUID(user_id)
+    except Exception:
+        user_uuid = user_id  # fallback to string
 
-        # Lists delta
-        if since_cv > 0:
-            lists = await TodoList.query.filter(user_id=user_id, cv__gt=since_cv).order_by("cv").all()
-        else:
-            lists = await TodoList.query.filter(user_id=user_id).all()
-        for list_obj in lists:
-            patch.append({
-                "op": "put",
-                "key": f"list/{list_obj.id}",
-                "value": {
-                    "id": str(list_obj.id),
-                    "type": list_obj.type,
-                    "title": list_obj.title,
-                    "variant": list_obj.variant
-                }
-            })
+    # Lists
+    if since_cv > 0:
+        list_rows = await database.fetch_all(
+            """
+            SELECT id, type, title, variant, cv
+            FROM lists
+            WHERE user_id = :user_id AND cv > :cv
+            ORDER BY cv
+            """,
+            {"user_id": user_uuid, "cv": since_cv},
+        )
+    else:
+        list_rows = await database.fetch_all(
+            """
+            SELECT id, type, title, variant, cv
+            FROM lists
+            WHERE user_id = :user_id
+            ORDER BY created_at
+            """,
+            {"user_id": user_uuid},
+        )
+    for row in list_rows:
+        patch.append({
+            "op": "put",
+            "key": f"list/{row[0]}",
+            "value": {
+                "id": str(row[0]),
+                "type": row[1],
+                "title": row[2],
+                "variant": row[3],
+            },
+        })
+        try:
+            max_cv = max(max_cv, int(row[4] or 0))
+        except Exception:
+            pass
+
+    # Tasks
+    if since_cv > 0:
+        task_rows = await database.fetch_all(
+            """
+            SELECT id, "list", title, description, checked, variant, position, cv
+            FROM tasks
+            WHERE user_id = :user_id AND cv > :cv
+            ORDER BY cv
+            """,
+            {"user_id": user_uuid, "cv": since_cv},
+        )
+    else:
+        task_rows = await database.fetch_all(
+            """
+            SELECT id, "list", title, description, checked, variant, position, cv
+            FROM tasks
+            WHERE user_id = :user_id
+            ORDER BY created_at
+            """,
+            {"user_id": user_uuid},
+        )
+    for row in task_rows:
+        patch.append({
+            "op": "put",
+            "key": f"task/{row[0]}",
+            "value": {
+                "id": str(row[0]),
+                "listId": str(row[1]) if row[1] is not None else None,
+                "title": row[2],
+                "description": row[3],
+                "completed": row[4],
+                "order": row[6],
+                "variant": row[5],
+            },
+        })
+        try:
+            max_cv = max(max_cv, int(row[7] or 0))
+        except Exception:
+            pass
+
+    # Shopping items
+    if since_cv > 0:
+        item_rows = await database.fetch_all(
+            """
+            SELECT id, "list", title, url, price, source, checked, variant, position, cv
+            FROM shopping_items
+            WHERE user_id = :user_id AND cv > :cv
+            ORDER BY cv
+            """,
+            {"user_id": user_uuid, "cv": since_cv},
+        )
+    else:
+        item_rows = await database.fetch_all(
+            """
+            SELECT id, "list", title, url, price, source, checked, variant, position, cv
+            FROM shopping_items
+            WHERE user_id = :user_id
+            ORDER BY created_at
+            """,
+            {"user_id": user_uuid},
+        )
+    for row in item_rows:
+        patch.append({
+            "op": "put",
+            "key": f"item/{row[0]}",
+            "value": {
+                "id": str(row[0]),
+                "listId": str(row[1]) if row[1] is not None else None,
+                "title": row[2],
+                "url": row[3],
+                "price": row[4],
+                "source": row[5],
+                "completed": row[6],
+                "variant": row[7],
+                "order": row[8],
+            },
+        })
+        try:
+            max_cv = max(max_cv, int(row[9] or 0))
+        except Exception:
+            pass
+
+    # Tombstones only in delta mode
+    if since_cv > 0:
+        tomb_rows = await database.fetch_all(
+            """
+            SELECT key, cv FROM todo_tombstones
+            WHERE user_id = :user_id AND cv > :cv
+            ORDER BY cv
+            """,
+            {"user_id": user_uuid, "cv": since_cv},
+        )
+        for row in tomb_rows:
+            patch.append({"op": "del", "key": row[0]})
             try:
-                max_cv = max(max_cv, int(getattr(list_obj, 'cv', 0) or 0))
-            except Exception:
-                pass
-        
-        # Tasks delta
-        if since_cv > 0:
-            tasks = await Task.query.filter(user_id=user_id, cv__gt=since_cv).order_by("cv").all()
-        else:
-            tasks = await Task.query.filter(user_id=user_id).all()
-        for task in tasks:
-            patch.append({
-                "op": "put",
-                "key": f"task/{task.id}",
-                "value": {
-                    "id": str(task.id),
-                    "listId": str(task.list_id),
-                    "title": task.title,
-                    "description": task.description,
-                    "completed": task.checked,
-                    "order": task.position,
-                    "variant": task.variant
-                }
-            })
-            try:
-                max_cv = max(max_cv, int(getattr(task, 'cv', 0) or 0))
-            except Exception:
-                pass
-        
-        # Shopping items delta
-        if since_cv > 0:
-            items = await ShoppingItem.query.filter(user_id=user_id, cv__gt=since_cv).order_by("cv").all()
-        else:
-            items = await ShoppingItem.query.filter(user_id=user_id).all()
-        for item in items:
-            patch.append({
-                "op": "put",
-                "key": f"item/{item.id}",
-                "value": {
-                    "id": str(item.id),
-                    "listId": str(item.list_id),
-                    "title": item.title,
-                    "url": item.url,
-                    "price": item.price,
-                    "source": item.source,
-                    "completed": item.checked,
-                    "order": item.position,
-                    "variant": item.variant
-                }
-            })
-            try:
-                max_cv = max(max_cv, int(getattr(item, 'cv', 0) or 0))
+                max_cv = max(max_cv, int(row[1] or 0))
             except Exception:
                 pass
 
-        # Tombstones for deletions (only for delta)
-        if since_cv > 0:
-            rows = await database.fetch_all(
-                """
-                SELECT key, cv FROM todo_tombstones
-                WHERE user_id = :user_id AND cv > :cv
-                ORDER BY cv
-                """,
-                {"user_id": user_id, "cv": since_cv},
-            )
-            for row in rows:
-                patch.append({"op": "del", "key": row[0]})
-                try:
-                    max_cv = max(max_cv, int(row[1]))
-                except Exception:
-                    pass
-        
-        return patch, max_cv
-    except Exception as e:
-        logger.error(f"Error getting todo delta: {e}")
-        return [], since_cv
+    return patch, max_cv
 
 
 async def get_todo_patch(user_id: str) -> List[Dict[str, Any]]:
     """Get full todo snapshot for todo-replicache-flat client (compat API)."""
     patch, _ = await get_todo_delta(user_id, since_cv=0)
     return patch
-        
-    except Exception as e:
-        logger.error(f"Error getting todo patch: {e}")
-        return []
 
 # Food Tracker Context Handlers
 async def process_food_mutation(mutation: Dict[str, Any], user_id: str, mutation_index: int = 0) -> None:
