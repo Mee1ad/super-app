@@ -13,6 +13,23 @@ from apps.ideas.models import Idea
 
 logger = logging.getLogger(__name__)
 
+# Allow-list and normalizer for variant values to keep API stable
+ALLOWED_VARIANTS = {"default", "outlined", "filled"}
+
+def normalize_variant(value: Any) -> str:
+    """Normalize variant to a supported, lower-case value.
+
+    Falls back to 'default' on invalid input.
+    """
+    try:
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ALLOWED_VARIANTS:
+                return lowered
+    except Exception:
+        pass
+    return "default"
+
 def convert_to_uuid(id_str: str, mutation_index: int = 0) -> str:
     """Convert any string ID to a valid UUID using hash, with index to ensure uniqueness"""
     if not id_str:
@@ -104,7 +121,7 @@ async def process_todo_mutation(
             list_id = convert_to_uuid(args.get('id', str(uuid4())), mutation_index)
             title = args.get('title', '')
             list_type = args.get('type', 'task')
-            variant = args.get('variant', 'default')
+            variant = normalize_variant(args.get('variant', 'default'))
             
             logger.info(f"Creating todo list: id={list_id}, title='{title}', type={list_type}, variant={variant}")
             
@@ -149,7 +166,7 @@ async def process_todo_mutation(
             description = args.get('description')
             checked = args.get('checked', False)
             position = args.get('position', 0)
-            variant = args.get('variant', 'default')
+            variant = normalize_variant(args.get('variant', 'default'))
             
             logger.info(f"Creating todo task: id={task_id}, list_id={list_id}, title='{title}', description='{description}', checked={checked}, position={position}, variant={variant}")
             
@@ -397,7 +414,8 @@ async def get_todo_delta(user_id: str, since_cv: int) -> tuple[List[Dict[str, An
                 "id": str(row[0]),
                 "type": row[1],
                 "title": row[2],
-                "variant": row[3],
+                # Ensure variant is lower-case in payload
+                "variant": normalize_variant(row[3]),
             },
         })
         try:
@@ -432,12 +450,13 @@ async def get_todo_delta(user_id: str, since_cv: int) -> tuple[List[Dict[str, An
             "key": f"task/{row[0]}",
             "value": {
                 "id": str(row[0]),
-                "listId": str(row[1]) if row[1] is not None else None,
+                # Map to frontend field names
+                "list_id": str(row[1]) if row[1] is not None else None,
                 "title": row[2],
                 "description": row[3],
-                "completed": row[4],
-                "order": row[6],
-                "variant": row[5],
+                "checked": row[4],
+                "position": row[6],
+                "variant": normalize_variant(row[5]),
             },
         })
         try:
@@ -472,14 +491,15 @@ async def get_todo_delta(user_id: str, since_cv: int) -> tuple[List[Dict[str, An
             "key": f"item/{row[0]}",
             "value": {
                 "id": str(row[0]),
-                "listId": str(row[1]) if row[1] is not None else None,
+                # Map to frontend field names
+                "list_id": str(row[1]) if row[1] is not None else None,
                 "title": row[2],
                 "url": row[3],
                 "price": row[4],
                 "source": row[5],
-                "completed": row[6],
-                "variant": row[7],
-                "order": row[8],
+                "checked": row[6],
+                "variant": normalize_variant(row[7]),
+                "position": row[8],
             },
         })
         try:
