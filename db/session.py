@@ -17,7 +17,8 @@ except Exception as e:
 
 # Create a shared registry instance
 try:
-    models_registry = Registry(database=database)
+    # Avoid duplicate model registration during mixed app/migration imports
+    models_registry = Registry(database=database, on_conflict="keep")
     logger.info("Models registry created successfully")
 except Exception as e:
     logger.error(f"Failed to create models registry: {type(e).__name__}: {e}", exc_info=True)
