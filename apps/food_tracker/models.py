@@ -17,4 +17,5 @@ class FoodEntry(UUIDBaseModel):
     
     class Meta:
         tablename = "food_entries"
-        registry = models_registry 
+        registry = models_registry
+        on_conflict = "keep"

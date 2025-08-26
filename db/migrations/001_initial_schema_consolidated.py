@@ -36,13 +36,8 @@ class InitialSchemaConsolidatedMigration(Migration):
             # Create PostgreSQL extension
             await self.database.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
         
-        # Import all models to ensure they are registered
-        from apps.todo.models import List, Task, ShoppingItem
-        from apps.auth.models import User, Role
-        from apps.changelog.models import ChangelogEntry, ChangelogView
-        from apps.ideas.models import Category, Idea
-        from apps.diary.models import Mood, DiaryEntry
-        from apps.food_tracker.models import FoodEntry
+        # Import all models once to ensure they are registered
+        import db.models  # noqa: F401
 
         
         # Create all tables using the registry

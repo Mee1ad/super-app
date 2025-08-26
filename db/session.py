@@ -24,12 +24,5 @@ except Exception as e:
     logger.error(f"Failed to create models registry: {type(e).__name__}: {e}", exc_info=True)
     raise
 
-# Import all models to ensure registration
-try:
-    import db.models
-    logger.info("Database models imported successfully")
-except Exception as e:
-    logger.error(f"Failed to import database models: {type(e).__name__}: {e}", exc_info=True)
-    raise
-
-# Note: Models will import models_registry directly to avoid circular imports 
+# Note: Models will import models_registry directly to avoid circular imports
+# and will be imported by application modules or migrations as needed.
