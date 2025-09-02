@@ -274,7 +274,6 @@ cors_config = CORSConfig(
         "http://localhost:3000", 
         "http://127.0.0.1:3000",
         "https://super-app-front.vercel.app",
-        "https://super-app-front-git-co-b8b252-soheilravasani-gmailcoms-projects.vercel.app",
         "https://api.todomodo.ir"
     ],
     # Allow all Vercel preview subdomains for the project
