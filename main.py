@@ -276,6 +276,9 @@ cors_config = CORSConfig(
         "https://super-app-front.vercel.app",
         "https://api.todomodo.ir"
     ],
+    # Allow all Vercel preview subdomains for the project
+    # Example: https://<preview>\.soheilravasani-gmailcoms-projects.vercel.app
+    allow_origin_regex=r"https://.*\.soheilravasani-gmailcoms-projects\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
