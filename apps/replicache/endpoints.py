@@ -1,4 +1,4 @@
-from esmerald import Request, Response, get, post, HTTPException, status
+from esmerald import Request, Response, get, post, options, HTTPException, status
 from starlette.responses import StreamingResponse
 from typing import Dict, Set, Any, Optional, Tuple
 import asyncio
@@ -194,8 +194,6 @@ async def sse_stream(request: Request) -> Response:
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control",
             },
         )
     
@@ -206,6 +204,15 @@ async def sse_stream(request: Request) -> Response:
     except Exception as e:
         logger.error(f"SSE stream error for user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stream error")
+
+# Explicit OPTIONS handler for SSE preflight
+@options(
+    tags=["Replicache"],
+    summary="CORS Preflight for SSE stream",
+    description="Handle CORS preflight requests for the SSE stream endpoint"
+)
+async def sse_stream_options() -> dict:
+    return {}
 
 # Poke endpoint for user-specific notifications
 @post(
